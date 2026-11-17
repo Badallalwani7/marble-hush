@@ -16,6 +16,10 @@ Stubborn Balls is a single-player puzzle game. It has no accounts, no ads and no
 
 This data is not linked to your name or contact details, is not used for advertising, and is not sold. Google processes it on our behalf under its own terms: https://firebase.google.com/support/privacy
 
+## The website's beta sign-up
+
+If you join the beta through our website, we keep the first name and email address you enter, the time, and which page the form was on. They are stored in a private Google Sheet owned by the developer and are used only to run the beta and to tell you about the launch. They are not shared or sold. Ask for removal at any time using the contact address on the game's store page, and your entry will be deleted.
+
 ## What the game does not do
 
 - No advertising identifiers are used and no ads are shown.
