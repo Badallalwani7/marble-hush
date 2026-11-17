@@ -7,8 +7,9 @@
 <meta name="description" content="Marble Hush is a calm marble puzzle for Android and iPhone. Tilt the board, roll the marbles and rest each one in its well. Play in your browser and join the Android beta.">
 <meta property="og:title" content="Marble Hush — tilt, roll, settle every marble">
 <meta property="og:description" content="240+ tilt-and-roll marble puzzles. Play the demo in your browser and join the Android beta.">
-<meta property="og:image" content="https://badallalwani7.github.io/marble-hush/img/shot1.jpg">
+<meta property="og:image" content="https://marblehush.scrolltrace.in/img/shot1.jpg">
 <link rel="icon" href="img/icon.png">
+<link rel="canonical" href="https://marblehush.scrolltrace.in/">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@500;700&display=swap">
 <style>
 :root{--fg:#f6f3ff;--dim:rgba(246,243,255,.7);--line:rgba(255,255,255,.18);--glass:rgba(255,255,255,.1);--gold:#ffd76a;--mint:#8dffe4;
@@ -51,6 +52,7 @@ h2{font:700 clamp(24px,4vw,34px)/1.1 var(--display);margin:0 0 10px}
 .step.locked{opacity:.45;pointer-events:none}
 .step.done{border-color:var(--mint)}.step.done .n{background:var(--mint);color:#0b2a26;border-color:var(--mint)}
 .bar{height:8px;border-radius:9px;background:rgba(255,255,255,.14);overflow:hidden;margin:0 0 18px}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--gold));transition:width .5s cubic-bezier(.2,1,.3,1)}
+.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{transform:scale(1.07);box-shadow:0 0 0 10px rgba(141,255,228,.25)}}
 .done-msg{margin-top:16px;padding:16px 20px;border-radius:18px;background:rgba(141,255,228,.16);border:1px solid var(--mint);display:none}
 .shots{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
 .shots img{height:420px;border-radius:22px;scroll-snap-align:center;box-shadow:0 14px 34px rgba(0,0,0,.35)}
@@ -97,7 +99,7 @@ footer{padding:40px 0 60px;color:var(--dim);font-size:14px;display:flex;flex-wra
 
   <section id="join" class="reveal">
     <h2>Join the Android beta</h2>
-    <p class="sub">Marble Hush is in closed testing on Google Play. Three quick steps with your Google account and it installs like any other app. Tick each step as you go.</p>
+    <p class="sub">Marble Hush is in closed testing on Google Play. Three taps with your Google account and it installs like any other app. This page walks you through and keeps your place.</p>
     <div class="bar"><i id="prog"></i></div>
     <div class="steps">
       <div class="step" data-k="1"><div class="n">1</div><div><h3>Join the testers group</h3><p>Use the same Google account as your phone's Play Store.</p></div><a class="btn" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta">Join group</a></div>
@@ -105,7 +107,8 @@ footer{padding:40px 0 60px;color:var(--dim);font-size:14px;display:flex;flex-wra
       <div class="step locked" data-k="3"><div class="n">3</div><div><h3>Install the game</h3><p>Download Marble Hush from Google Play and start rolling.</p></div><a class="btn" target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.baadalalwani.marblehush">Open in Play</a></div>
     </div>
     <div class="done-msg" id="doneMsg"><b>You're in.</b> Thanks for testing. Keeping the game installed for two weeks is what gets it released to everyone.</div>
-    <p class="note">The opt-in and install links start working once Google approves the test. iPhone version is coming.</p>
+    <p class="note" id="device">Do these steps on your Android phone, or on a computer signed in to the same Google account.</p>
+    <p class="note">Each step opens in a new tab; come back here and the next one is ready. <a href="#" id="reset">Start over</a> · iPhone version is coming.</p>
   </section>
 
   <footer><span>© 2026 Marble Hush</span><span><a href="privacy">Privacy Policy</a> · <a href="terms">Terms</a></span></footer>
@@ -120,7 +123,15 @@ document.getElementById('cover').onclick=startDemo;document.getElementById('play
 // join steps: each one unlocks the next and is remembered on this device
 const steps=[...document.querySelectorAll('.step')];let done=0;try{done=+localStorage.getItem('mh-join')||0}catch(e){}
 function paint(){steps.forEach((s,i)=>{s.classList.toggle('done',i<done);s.classList.toggle('locked',i>done);s.querySelector('.n').textContent=i<done?'✓':i+1});document.getElementById('prog').style.width=done/steps.length*100+'%';document.getElementById('doneMsg').style.display=done>=steps.length?'block':'none'}
-steps.forEach((s,i)=>s.querySelector('a').addEventListener('click',()=>{if(i>=done){done=i+1;try{localStorage.setItem('mh-join',done)}catch(e){}setTimeout(paint,600)}}));paint();
+let pending=-1;
+steps.forEach((s,i)=>s.querySelector('a').addEventListener('click',()=>{pending=i}));
+function advance(){if(pending<0)return;if(pending>=done){done=pending+1;try{localStorage.setItem('mh-join',done)}catch(e){}}pending=-1;paint();
+  const next=steps[done];if(next){next.scrollIntoView({behavior:'smooth',block:'center'});const b=next.querySelector('a');b.classList.add('pulse');b.focus({preventScroll:true})}}
+// coming back to this tab after a step means it is done: move the visitor straight to the next one
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(advance,300)});addEventListener('focus',()=>setTimeout(advance,300));
+document.getElementById('reset').onclick=e=>{e.preventDefault();done=0;try{localStorage.removeItem('mh-join')}catch(_){}paint()};
+if(/Android/i.test(navigator.userAgent))document.getElementById('device').textContent='You are on Android, so each step opens right on this phone.';
+paint();
 // sections fade up as they scroll into view
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 </script>
