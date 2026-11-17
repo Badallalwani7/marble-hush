@@ -1,4 +1,4 @@
-# Marble Hush
+# Stubborn Balls
 
 A calm tilt-and-roll marble puzzle for iPhone and Android.
 

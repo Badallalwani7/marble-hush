@@ -1,8 +1,8 @@
-# Marble Hush — Privacy Policy
+# Stubborn Balls — Privacy Policy
 
 _Last updated: 17 November 2026_
 
-Marble Hush is a single-player puzzle game. It has no accounts, no ads and no in-app purchases, and it never asks for your name, email address, contacts, photos or location.
+Stubborn Balls is a single-player puzzle game. It has no accounts, no ads and no in-app purchases, and it never asks for your name, email address, contacts, photos or location.
 
 ## What the game collects
 
@@ -24,7 +24,7 @@ This data is not linked to your name or contact details, is not used for adverti
 
 ## Children
 
-Marble Hush is not directed at children under 13 and does not knowingly collect personal information from them.
+Stubborn Balls is not directed at children under 13 and does not knowingly collect personal information from them.
 
 ## Your choices
 
