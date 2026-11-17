@@ -36,7 +36,21 @@ li::before{content:counter(n);width:40px;height:40px;border-radius:50%;display:g
 li b{display:block;font:800 15px/1.25 var(--display);margin-bottom:3px}li span{color:var(--dim);font-size:15px}
 li a{color:var(--mint)}
 footer{padding:30px 0 50px;font-size:13px;color:var(--dim)}footer a{color:inherit}
-@media (prefers-reduced-motion:reduce){.down{animation:none}}
+button.btn{border:0;cursor:pointer;font:inherit}
+.veil{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:rgba(8,4,36,.72);backdrop-filter:blur(8px)}
+.veil[hidden]{display:none}
+.sheet{position:relative;width:min(100%,400px);padding:30px 24px 22px;border-radius:28px;background:#171046;border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.55);text-align:center;animation:rise .35s cubic-bezier(.2,1.2,.3,1)}
+@keyframes rise{from{transform:translateY(30px) scale(.96);opacity:0}}
+.sheet h3{margin:0 0 6px;font:800 24px/1.1 var(--display)}.sheet p{margin:0 0 16px;color:var(--dim);font-size:15px}
+.sheet label{display:block;text-align:left;font:700 12px/1 var(--text);color:var(--dim);margin-bottom:12px}
+.sheet input{display:block;width:100%;margin-top:7px;padding:14px 15px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:var(--fg);font:500 16px/1.2 var(--text);outline:0}
+.sheet input:focus{border-color:var(--mint)}
+.sheet .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.sheet .btn{width:100%;margin-top:6px;padding:17px}.sheet .btn.alt{background:none;color:var(--fg);border:1.5px solid rgba(255,255,255,.3);box-shadow:none;margin-top:10px}
+.sheet .fine{margin:14px 0 0;font-size:12px}.sheet .fine a{color:var(--mint)}
+.sheet .err{color:#ff9db8;margin:0 0 10px;font-size:14px}
+.x{position:absolute;top:10px;right:12px;width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:var(--fg);font-size:22px;line-height:1;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.down{animation:none}.sheet{animation:none}}
 </style>
 </head>
 <body>
@@ -47,21 +61,43 @@ footer{padding:30px 0 50px;font-size:13px;color:var(--dim)}footer a{color:inheri
     <p class="tag">Tilt Ball Maze</p>
     <h1>Stubborn<br>Balls</h1>
     <p class="lede">Tilt the board. Coax every ball into its hole. They won't go quietly.</p>
-    <a class="btn" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta"><b>Get the game now</b><span>(join the beta testing)</span></a>
+    <button class="btn" data-join><b>Get the game now</b><span>(join the beta testing)</span></button>
     <div class="down">scroll and watch them try ↓</div>
   </section>
   <section class="how">
     <h2>How to get it</h2>
     <ol>
-      <li><div><b>Tap “Get the game now”</b><span>It opens our Google Group. Sign in with the Google account on your Android phone.</span></div></li>
-      <li><div><b>Press “Join group”</b><span>It's the blue button at the top. Ignore the “no permission” note under it.</span></div></li>
+      <li><div><b>Tap “Get the game now”</b><span>Leave your first name and the email of the Google account on your Android phone.</span></div></li>
+      <li><div><b>Press “Join group”</b><span>We open our Google Group for you. It's the blue button at the top; ignore the “no permission” note under it.</span></div></li>
       <li><div><b>Become a tester</b><span>Open <a target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush">the tester page</a> and tap “Become a tester”.</span></div></li>
       <li><div><b>Install and play</b><span>Download it from <a target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.baadalalwani.marblehush">Google Play</a>.</span></div></li>
     </ol>
-    <a class="btn" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta"><b>Get the game now</b><span>(join the beta testing)</span></a>
+    <button class="btn" data-join><b>Get the game now</b><span>(join the beta testing)</span></button>
   </section>
   <footer><a href="play/">Try it in your browser</a> · <a href="privacy">Privacy</a> · <a href="terms">Terms</a> · © 2026 Stubborn Balls</footer>
 </main>
+<div class="veil" id="veil" hidden>
+  <form class="sheet" id="join" novalidate>
+    <button type="button" class="x" id="close" aria-label="Close">×</button>
+    <div id="ask">
+      <h3>Join the beta</h3>
+      <p>Free on Android. Tell us where to find you and we'll take you to the download.</p>
+      <label>First name<input name="name" autocomplete="given-name" maxlength="60" required></label>
+      <label>Google account email<input name="email" type="email" autocomplete="email" maxlength="120" required></label>
+      <input name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+      <p class="err" id="err" hidden></p>
+      <button class="btn" id="send"><b>Continue</b></button>
+      <p class="fine">We keep your name and email only to run the beta. <a href="privacy">Privacy</a></p>
+    </div>
+    <div id="next" hidden>
+      <h3>You're on the list</h3>
+      <p>Two taps left, both with that same Google account:</p>
+      <a class="btn" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta"><b>1. Join the group</b></a>
+      <a class="btn alt" target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush"><b>2. Become a tester &amp; install</b></a>
+      <p class="fine">On the group page, press the blue “Join group” button at the top.</p>
+    </div>
+  </form>
+</div>
 <script>
 // A field of holes with balls drifting over it. Scrolling stirs the balls and pulls each toward a hole;
 // one that arrives slowly enough drops in, sits a while, then pops out and goes looking for another.
@@ -119,6 +155,23 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(Math.abs(
 addEventListener('resize',layout);layout();
 if(still){for(let i=0;i<240;i++)step(1/30,i*33);draw();addEventListener('scroll',draw,{passive:true})}else requestAnimationFrame(frame);
 })();
+</script>
+<script>
+// Sign-up: the name and email go to a Google Sheet (which emails the owner), then the visitor is shown the two Google steps.
+const WAITLIST_ENDPOINT='https://script.google.com/macros/s/AKfycbyOSyOvrlWvy-uEKnW_Crxjiy4WSVFZbWN4XkO9raHEXeBED3jeK64JrFKOdirZgoHxzw/exec'; // the Apps Script web app URL; while empty, the form skips straight to the steps
+const veil=document.getElementById('veil'),form=document.getElementById('join'),err=document.getElementById('err');
+const show=()=>{veil.hidden=false;try{if(localStorage.getItem('sb-joined')){ask.hidden=true;next.hidden=false}else form.name.focus()}catch(e){form.name.focus()}};
+const ask=document.getElementById('ask'),next=document.getElementById('next');
+document.querySelectorAll('[data-join]').forEach(b=>b.addEventListener('click',show));
+document.getElementById('close').onclick=()=>veil.hidden=true;
+veil.addEventListener('click',e=>{if(e.target===veil)veil.hidden=true});addEventListener('keydown',e=>{if(e.key==='Escape')veil.hidden=true});
+form.addEventListener('submit',async e=>{e.preventDefault();err.hidden=true;
+  const name=form.name.value.trim(),email=form.email.value.trim();
+  if(!name||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Please enter your first name and a valid email.';err.hidden=false;return}
+  const btn=document.getElementById('send');btn.disabled=true;btn.firstElementChild.textContent='One moment…';
+  try{if(WAITLIST_ENDPOINT)await fetch(WAITLIST_ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({name,email,source:'site',website:form.website.value})})}catch(_){}
+  try{localStorage.setItem('sb-joined','1')}catch(_){}
+  ask.hidden=true;next.hidden=false});
 </script>
 </body>
 </html>
