@@ -8,76 +8,115 @@
 <meta property="og:title" content="Stubborn Balls — Tilt Ball Maze">
 <meta property="og:description" content="Tilt the board. Coax every ball into its hole. Join the Android beta.">
 <meta property="og:image" content="https://stubbornballs.scrolltrace.in/img/shot1.jpg">
+<meta name="theme-color" content="#06061a">
 <link rel="icon" href="img/icon.png">
 <link rel="canonical" href="https://stubbornballs.scrolltrace.in/">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;800&family=Manrope:wght@500;700&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
-:root{--fg:#f6f3ff;--dim:rgba(246,243,255,.72);--mint:#8dffe4;--display:"Unbounded",ui-rounded,system-ui,sans-serif;--text:"Manrope",ui-rounded,system-ui,sans-serif}
+/* Dark glass: an ink-blue field lit by soft aurora, frosted panels, hairline borders, one quiet accent. */
+:root{--ink:#06061a;--fg:#f4f5ff;--dim:rgba(232,235,255,.62);--faint:rgba(232,235,255,.4);--hair:rgba(255,255,255,.14);--glass:rgba(255,255,255,.06);--accent:#a8ffe9;
+  --display:"Inter Tight","SF Pro Display",system-ui,sans-serif;--text:"Inter","SF Pro Text",system-ui,sans-serif}
 *{box-sizing:border-box}
 html,body{margin:0}
-body{color:var(--fg);font:500 17px/1.55 var(--text);background:linear-gradient(#150b4d,#4a2fd0 55%,#c56fe0 120%);overflow-x:hidden}
-canvas#field{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
-main{position:relative;z-index:1;text-align:center;padding:0 max(20px,env(safe-area-inset-left))}
-.hero{min-height:100vh;min-height:100svh;display:grid;place-content:center;justify-items:center;gap:22px;padding:60px 0}
-.hero img{width:92px;height:92px;border-radius:24px;box-shadow:0 16px 40px rgba(0,0,0,.4)}
-h1{margin:0;font:800 clamp(40px,9vw,92px)/.98 var(--display);letter-spacing:-.03em;text-shadow:0 8px 40px rgba(10,5,50,.55)}
-.tag{margin:0;font:500 clamp(12px,2.4vw,16px)/1 var(--display);letter-spacing:.34em;text-transform:uppercase;color:var(--mint)}
-.lede{margin:0;max-width:440px;color:var(--dim)}
-.btn{display:inline-grid;gap:5px;padding:20px 38px;border-radius:99px;text-decoration:none;color:#120f2e;background:linear-gradient(#fff,#d9d2ff);box-shadow:0 16px 40px rgba(0,0,0,.4),inset 0 -4px 0 rgba(0,0,0,.14);transition:transform .15s}
-.btn b{font:800 18px/1 var(--display)}.btn span{font:700 12px/1 var(--text);opacity:.65}
-.btn:hover{transform:translateY(-3px) scale(1.02)}.btn:active{transform:scale(.96)}
-.down{margin-top:26px;font-size:13px;color:var(--dim);animation:bob 1.8s ease-in-out infinite}
-@keyframes bob{50%{transform:translateY(7px)}}
-.how{min-height:100vh;min-height:100svh;display:grid;place-content:center;justify-items:center;gap:26px;padding:70px 0}
-h2{margin:0;font:800 clamp(24px,5vw,40px)/1.1 var(--display)}
-ol{list-style:none;margin:0;padding:0;display:grid;gap:14px;max-width:520px;text-align:left;counter-reset:n}
-li{counter-increment:n;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;padding:18px 20px;border-radius:22px;background:rgba(12,8,50,.55);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px)}
-li::before{content:counter(n);width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font:800 15px/1 var(--display);color:#120f2e;background:radial-gradient(circle at 32% 26%,#fff,var(--mint) 60%,#2aa58c 130%)}
-li b{display:block;font:800 15px/1.25 var(--display);margin-bottom:3px}li span{color:var(--dim);font-size:15px}
-li a{color:var(--mint)}
-footer{padding:30px 0 50px;font-size:13px;color:var(--dim)}footer a{color:inherit}
-button.btn{border:0;cursor:pointer;font:inherit}
-.veil{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:rgba(8,4,36,.72);backdrop-filter:blur(8px)}
+body{color:var(--fg);font:400 16px/1.6 var(--text);background:var(--ink);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.aurora{position:fixed;inset:-20%;z-index:0;pointer-events:none;filter:blur(70px);opacity:.9;
+  background:radial-gradient(38% 34% at 22% 22%,rgba(99,84,255,.55),transparent 70%),radial-gradient(34% 30% at 82% 30%,rgba(54,196,214,.38),transparent 70%),radial-gradient(40% 36% at 60% 88%,rgba(214,92,190,.4),transparent 70%)}
+canvas#field{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.glass{background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.035));border:1px solid var(--hair);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 24px 60px rgba(0,0,8,.45)}
+nav{position:fixed;z-index:4;top:14px;left:50%;transform:translateX(-50%);width:min(calc(100% - 28px),880px);display:flex;align-items:center;justify-content:space-between;padding:9px 10px 9px 12px;border-radius:99px}
+.brand{display:flex;align-items:center;gap:10px;font:600 15px/1 var(--display);letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+.brand img{width:28px;height:28px;border-radius:8px}
+.chip{padding:9px 16px;border-radius:99px;font:600 13px/1 var(--text);color:var(--ink);background:var(--fg);border:0;cursor:pointer;transition:transform .2s,opacity .2s}
+.chip:hover{opacity:.9;transform:translateY(-1px)}
+main{position:relative;z-index:2;padding:0 max(20px,env(safe-area-inset-left))}
+.hero{min-height:100vh;min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:26px;padding:110px 0 70px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:8px 15px;border-radius:99px;font:500 12px/1 var(--text);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+h1{margin:0;font:600 clamp(48px,10.5vw,124px)/.92 var(--display);letter-spacing:-.045em;background:linear-gradient(180deg,#fff 30%,rgba(190,198,255,.62));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{margin:0;max-width:460px;font-size:clamp(16px,2.1vw,19px);color:var(--dim)}
+.cta{position:relative;display:inline-flex;align-items:center;gap:16px;padding:10px 12px 10px 28px;border-radius:99px;border:1px solid rgba(255,255,255,.28);cursor:pointer;color:var(--fg);font:inherit;text-align:left;
+  background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.06));-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(255,255,255,.06),0 18px 50px rgba(60,50,220,.35);transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s;overflow:hidden}
+.cta::before{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);transform:translateX(-120%);transition:transform .8s ease}
+.cta:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 24px 64px rgba(80,70,240,.5)}
+.cta:hover::before{transform:translateX(120%)}.cta:active{transform:scale(.98)}
+.cta b{display:block;font:600 17px/1.15 var(--display);letter-spacing:-.01em}.cta small{display:block;margin-top:3px;font:400 12.5px/1 var(--text);color:var(--dim)}
+.cta .go{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--fg);color:var(--ink)}
+.cta .go svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.meta{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 22px;font-size:13px;color:var(--faint)}
+.meta span::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--faint);margin-right:9px;vertical-align:middle}
+.how{max-width:880px;margin:0 auto;padding:40px 0 90px}
+.how h2{margin:0 0 8px;font:600 clamp(28px,5vw,44px)/1.05 var(--display);letter-spacing:-.035em;text-align:center}
+.how>p{margin:0 auto 34px;max-width:480px;text-align:center;color:var(--dim)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.step{padding:22px 20px;border-radius:24px}
+.step em{display:block;font:500 12px/1 var(--text);font-style:normal;letter-spacing:.14em;color:var(--accent);margin-bottom:18px}
+.step b{display:block;font:600 16px/1.25 var(--display);letter-spacing:-.01em;margin-bottom:6px}
+.step span{font-size:14px;line-height:1.5;color:var(--dim)}.step a{color:var(--fg)}
+.guide{border-radius:28px;padding:24px;display:grid;gap:18px}
+.guide h3{margin:0 0 8px;font:600 20px/1.2 var(--display);letter-spacing:-.02em}
+.guide p{margin:0;font-size:14.5px;color:var(--dim);max-width:640px}
+.shotwrap{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--hair);background:#fff;line-height:0}
+.shotwrap img{width:100%;height:auto;display:block}
+/* the ring sits exactly over Google's "Join group" button in the screenshot */
+.ring{position:absolute;left:40.6%;top:5.5%;width:16.8%;height:18%;border-radius:10px;border:2.5px solid #ff3d6e;box-shadow:0 0 0 4px rgba(255,61,110,.25);animation:ring 1.6s ease-in-out infinite}
+.tap{position:absolute;left:59%;top:8.5%;padding:5px 10px;border-radius:99px;background:#ff3d6e;color:#fff;font:600 12px/1 var(--text);white-space:nowrap}
+@keyframes ring{50%{box-shadow:0 0 0 10px rgba(255,61,110,0)}}
+.again{display:grid;justify-items:center;padding-top:44px}
+footer{position:relative;z-index:2;padding:26px 20px 44px;text-align:center;font-size:13px;color:var(--faint)}footer a{color:var(--dim);text-decoration:none}footer a:hover{color:var(--fg)}
+/* sign-up sheet */
+.veil{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:18px;background:rgba(3,3,16,.6);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 .veil[hidden]{display:none}
-.sheet{position:relative;width:min(100%,400px);padding:30px 24px 22px;border-radius:28px;background:#171046;border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.55);text-align:center;animation:rise .35s cubic-bezier(.2,1.2,.3,1)}
-@keyframes rise{from{transform:translateY(30px) scale(.96);opacity:0}}
-.sheet h3{margin:0 0 6px;font:800 24px/1.1 var(--display)}.sheet p{margin:0 0 16px;color:var(--dim);font-size:15px}
-.sheet label{display:block;text-align:left;font:700 12px/1 var(--text);color:var(--dim);margin-bottom:12px}
-.sheet input{display:block;width:100%;margin-top:7px;padding:14px 15px;border-radius:14px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:var(--fg);font:500 16px/1.2 var(--text);outline:0}
-.sheet input:focus{border-color:var(--mint)}
+.sheet{position:relative;width:min(100%,470px);max-height:calc(100svh - 36px);overflow:auto;padding:30px 24px 22px;border-radius:30px;text-align:left;animation:rise .4s cubic-bezier(.2,1,.3,1);background:linear-gradient(180deg,rgba(40,40,84,.82),rgba(16,16,44,.86))}
+@keyframes rise{from{transform:translateY(26px) scale(.97);opacity:0}}
+.sheet h3{margin:0 0 6px;font:600 26px/1.1 var(--display);letter-spacing:-.03em}.sheet p{margin:0 0 18px;color:var(--dim);font-size:14.5px}
+.sheet label{display:block;font:500 12px/1 var(--text);letter-spacing:.04em;color:var(--dim);margin-bottom:14px}
+.sheet input{display:block;width:100%;margin-top:8px;padding:14px 15px;border-radius:14px;border:1px solid var(--hair);background:rgba(255,255,255,.06);color:var(--fg);font:400 16px/1.2 var(--text);outline:0;transition:border-color .2s,background .2s}
+.sheet input:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.1)}
 .sheet .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
-.sheet .btn{width:100%;margin-top:6px;padding:17px}.sheet .btn.alt{background:none;color:var(--fg);border:1.5px solid rgba(255,255,255,.3);box-shadow:none;margin-top:10px}
-.sheet .fine{margin:14px 0 0;font-size:12px}.sheet .fine a{color:var(--mint)}
+.wide{display:flex;align-items:center;justify-content:center;width:100%;padding:16px;border-radius:16px;border:0;cursor:pointer;font:600 15px/1 var(--display);color:var(--ink);background:var(--fg);text-decoration:none;transition:transform .2s,opacity .2s}
+.wide:hover{opacity:.92;transform:translateY(-1px)}.wide.alt{margin-top:10px;background:rgba(255,255,255,.08);color:var(--fg);border:1px solid var(--hair)}
+.sheet .fine{margin:14px 0 0;font-size:12px;color:var(--faint)}.sheet .fine a{color:var(--dim)}
 .sheet .err{color:#ff9db8;margin:0 0 10px;font-size:14px}
-.x{position:absolute;top:10px;right:12px;width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:var(--fg);font-size:22px;line-height:1;cursor:pointer}
-@media (prefers-reduced-motion:reduce){.down{animation:none}.sheet{animation:none}}
+.sheet .shotwrap{margin:0 0 14px}
+.x{position:absolute;top:12px;right:12px;width:34px;height:34px;border:1px solid var(--hair);border-radius:50%;background:rgba(255,255,255,.06);color:var(--fg);font-size:20px;line-height:1;cursor:pointer}
+@media (max-width:820px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:460px){.steps{grid-template-columns:1fr}.cta{padding-left:22px}.cta b{font-size:16px}}
+@media (prefers-reduced-motion:reduce){.sheet,.ring{animation:none}.cta::before{display:none}}
 </style>
 </head>
 <body>
+<div class="aurora" aria-hidden="true"></div>
 <canvas id="field" aria-hidden="true"></canvas>
+<nav class="glass"><a class="brand" href="#"><img src="img/icon.png" alt="">Stubborn Balls</a><button class="chip" data-join>Join the beta</button></nav>
 <main>
   <section class="hero">
-    <img src="img/icon.png" alt="">
-    <p class="tag">Tilt Ball Maze</p>
+    <span class="eyebrow glass"><i></i>Tilt Ball Maze</span>
     <h1>Stubborn<br>Balls</h1>
     <p class="lede">Tilt the board. Coax every ball into its hole. They won't go quietly.</p>
-    <button class="btn" data-join><b>Get the game now</b><span>(join the beta testing)</span></button>
-    <div class="down">scroll and watch them try ↓</div>
+    <button class="cta" data-join><span><b>Get the game now</b><small>(join the beta testing)</small></span><span class="go"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+    <div class="meta"><span>Free on Android</span><span>240+ puzzles</span><span>No ads</span></div>
   </section>
-  <section class="how">
-    <h2>How to get it</h2>
-    <ol>
-      <li><div><b>Tap “Get the game now”</b><span>Leave your first name and the email of the Google account on your Android phone.</span></div></li>
-      <li><div><b>Press “Join group”</b><span>We open our Google Group for you. It's the blue button at the top; ignore the “no permission” note under it.</span></div></li>
-      <li><div><b>Become a tester</b><span>Open <a target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush">the tester page</a> and tap “Become a tester”.</span></div></li>
-      <li><div><b>Install and play</b><span>Download it from <a target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.baadalalwani.marblehush">Google Play</a>.</span></div></li>
-    </ol>
-    <button class="btn" data-join><b>Get the game now</b><span>(join the beta testing)</span></button>
+  <section class="how" id="how">
+    <h2>Four steps to play</h2>
+    <p>The beta runs through Google Play, so it installs and updates like any other app.</p>
+    <div class="steps">
+      <div class="step glass"><em>01</em><b>Sign up</b><span>Tap “Get the game now” and leave your first name and Google account email.</span></div>
+      <div class="step glass"><em>02</em><b>Join the group</b><span>We open our Google Group. Press <b style="display:inline;font:inherit;color:var(--fg)">Join group</b> at the top.</span></div>
+      <div class="step glass"><em>03</em><b>Become a tester</b><span>Open <a target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush">the tester page</a> and tap “Become a tester”.</span></div>
+      <div class="step glass"><em>04</em><b>Install</b><span>Download it from <a target="_blank" rel="noopener" href="https://play.google.com/store/apps/details?id=com.baadalalwani.marblehush">Google Play</a> and start rolling.</span></div>
+    </div>
+    <div class="guide glass">
+      <div><h3>Step 2 looks like this</h3><p>Google's page says “You don't have permission to access this content”. That's normal and only refers to messages. The button you want is <b style="color:var(--fg)">Join group</b>, next to the group's name at the top left.</p></div>
+      <div class="shotwrap"><img src="img/join-group.png" width="1400" height="400" loading="lazy" alt="The Google Group page for Stubborn Balls beta testers, with the Join group button next to the group name at the top left"><span class="ring"></span><span class="tap">Tap here</span></div>
+    </div>
+    <div class="again"><button class="cta" data-join><span><b>Get the game now</b><small>(join the beta testing)</small></span><span class="go"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button></div>
   </section>
-  <footer><a href="play/">Try it in your browser</a> · <a href="privacy">Privacy</a> · <a href="terms">Terms</a> · © 2026 Stubborn Balls</footer>
 </main>
+<footer><a href="play/">Try it in your browser</a> &nbsp;·&nbsp; <a href="privacy">Privacy</a> &nbsp;·&nbsp; <a href="terms">Terms</a> &nbsp;·&nbsp; © 2026 Stubborn Balls</footer>
 <div class="veil" id="veil" hidden>
-  <form class="sheet" id="join" novalidate>
+  <form class="sheet glass" id="join" novalidate>
     <button type="button" class="x" id="close" aria-label="Close">×</button>
     <div id="ask">
       <h3>Join the beta</h3>
@@ -86,15 +125,16 @@ button.btn{border:0;cursor:pointer;font:inherit}
       <label>Google account email<input name="email" type="email" autocomplete="email" maxlength="120" required></label>
       <input name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
       <p class="err" id="err" hidden></p>
-      <button class="btn" id="send"><b>Continue</b></button>
+      <button class="wide" id="send"><b>Continue</b></button>
       <p class="fine">We keep your name and email only to run the beta. <a href="privacy">Privacy</a></p>
     </div>
     <div id="next" hidden>
       <h3>You're on the list</h3>
-      <p>Two taps left, both with that same Google account:</p>
-      <a class="btn" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta"><b>1. Join the group</b></a>
-      <a class="btn alt" target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush"><b>2. Become a tester &amp; install</b></a>
-      <p class="fine">On the group page, press the blue “Join group” button at the top.</p>
+      <p>Two taps left, both with that same Google account. On the group page, press <b style="color:var(--fg)">Join group</b> at the top left:</p>
+      <div class="shotwrap"><img src="img/join-group.png" width="1400" height="400" alt="Where the Join group button is on the Google Group page"><span class="ring"></span><span class="tap">Tap here</span></div>
+      <a class="wide" target="_blank" rel="noopener" href="https://groups.google.com/g/marblehush-beta"><b>1. Join the group</b></a>
+      <a class="wide alt" target="_blank" rel="noopener" href="https://play.google.com/apps/testing/com.baadalalwani.marblehush"><b>2. Become a tester &amp; install</b></a>
+      <p class="fine">Ignore the “no permission” note on Google's page; it only refers to messages.</p>
     </div>
   </form>
 </div>
@@ -103,7 +143,7 @@ button.btn{border:0;cursor:pointer;font:inherit}
 // one that arrives slowly enough drops in, sits a while, then pops out and goes looking for another.
 (()=>{
 const cv=document.getElementById('field'),g=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion:reduce)').matches;
-const TINT=['#e6ecff','#ffd76a','#ff6f9c','#6fd3ff','#8dffe4'];
+const TINT=['#c9d4ff','#ffe2a6','#ffa8c4','#9fe0ff','#a8ffe9'];
 let W=0,H=0,docH=0,dpr=1,holes=[],balls=[],energy=0,lastY=scrollY,seed=7;
 const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
 function layout(){
@@ -141,14 +181,18 @@ function step(dt,now){
 }
 function draw(){
   g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);const oy=scrollY;
-  for(const h of holes){const y=h.y-oy;if(y<-80||y>H+80)continue;
-    const gr=g.createRadialGradient(h.x,y+h.r*.25,h.r*.1,h.x,y,h.r);gr.addColorStop(0,'rgba(4,2,24,.95)');gr.addColorStop(1,'rgba(10,6,48,.75)');
+  for(const h of holes){const y=h.y-oy;if(y<-90||y>H+90)continue;
+    const gr=g.createRadialGradient(h.x,y+h.r*.3,h.r*.1,h.x,y,h.r);gr.addColorStop(0,'rgba(2,2,12,.9)');gr.addColorStop(1,'rgba(8,8,28,.55)');
     g.fillStyle=gr;g.beginPath();g.arc(h.x,y,h.r,0,6.283);g.fill();
-    g.lineWidth=2.5;g.strokeStyle=`rgba(${141+h.glow*60|0},255,228,${.22+h.glow*.7})`;g.shadowColor='rgba(141,255,228,.9)';g.shadowBlur=h.glow*22;g.stroke();g.shadowBlur=0}
-  for(const b of balls){const y=b.y-oy,r=b.r*b.s;if(y<-80||y>H+80)continue;
-    if(!b.in){g.fillStyle='rgba(6,2,30,.28)';g.beginPath();g.ellipse(b.x+r*.25,y+r*.75,r*.9,r*.42,0,0,6.283);g.fill()}
-    const gr=g.createRadialGradient(b.x-r*.35,y-r*.4,r*.08,b.x,y,r*1.05);gr.addColorStop(0,'#fff');gr.addColorStop(.3,b.c);gr.addColorStop(1,'rgba(14,10,46,.95)');
-    g.fillStyle=gr;g.beginPath();g.arc(b.x,y,r,0,6.283);g.fill()}
+    g.lineWidth=1;g.strokeStyle=`rgba(255,255,255,${.14+h.glow*.55})`;g.shadowColor='rgba(170,200,255,.9)';g.shadowBlur=h.glow*26;g.stroke();g.shadowBlur=0}
+  for(const b of balls){const y=b.y-oy,r=b.r*b.s;if(y<-90||y>H+90)continue;
+    if(!b.in){g.fillStyle='rgba(0,0,10,.3)';g.beginPath();g.ellipse(b.x+r*.2,y+r*.8,r*.85,r*.36,0,0,6.283);g.fill()}
+    // a glass sphere: faint tinted body, bright rim on the lit side, one sharp highlight
+    let gr=g.createRadialGradient(b.x-r*.3,y-r*.35,r*.05,b.x,y,r);gr.addColorStop(0,'rgba(255,255,255,.55)');gr.addColorStop(.35,b.c+'55');gr.addColorStop(1,'rgba(20,22,60,.5)');
+    g.fillStyle=gr;g.beginPath();g.arc(b.x,y,r,0,6.283);g.fill();
+    gr=g.createLinearGradient(b.x-r,y-r,b.x+r,y+r);gr.addColorStop(0,'rgba(255,255,255,.85)');gr.addColorStop(.5,'rgba(255,255,255,.08)');gr.addColorStop(1,b.c+'aa');
+    g.lineWidth=1.4;g.strokeStyle=gr;g.stroke();
+    g.fillStyle='rgba(255,255,255,.9)';g.beginPath();g.ellipse(b.x-r*.38,y-r*.42,r*.2,r*.12,-.6,0,6.283);g.fill()}
 }
 let last=performance.now();
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(Math.abs(document.documentElement.scrollHeight-docH)>40)layout();step(dt,now);draw();requestAnimationFrame(frame)}
