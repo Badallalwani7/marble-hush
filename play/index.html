@@ -196,6 +196,7 @@ const SZ=[.18,.25,.32,.4];                         // marble radii: tiny, regula
 const RW=SZ.map(r=>r*1.05);                    // matching well radii
 const TINT=['#ffd76a','#e6ecff','#ff6f9c','#6fd3ff'];
 const PR=.36, WELL=.26, G=36, MAXT=.3, WT=.14, WALLH=.28, H=1/240;
+const MAGR=2.3; // reach of a hidden magnet
 const SEAT_D=.6, SEAT_V=1.3, SEAT_T=.14; // how centred, how slow, and for how long a marble must sit over a well to settle   // how fast a marble sinks while it is over an open well: fast marbles cross before they sink
 
 // ---------- worlds & levels ----------
@@ -216,7 +217,7 @@ const LEDGE=[[0,-2.2,6.4,3.6,.55]];
 // Every world is five levels followed by a fork: two hard boards (f:1), beat either to move on.
 const LEVELS=[
   {w:0,name:'First Light',W:5,D:6,balls:bs([[0,-2]]),holes:hs([[0,1.3]]),tip:'Drag to tilt; let go and the board levels out. A marble rolls straight over a well. It only drops in when you bring it to rest right on top.'},
-  {w:0,name:'Three Wishes',W:5.4,D:6.4,balls:bs(row(3,-2.5,.8)),holes:hs([[-1.4,.4],[1.4,.4],[0,1.9]])},
+  {w:0,name:'Three Wishes',W:5.4,D:6.4,balls:bs(row(3,-2.5,.8)),holes:hs([[-1.4,.4],[1.4,.4],[0,1.9]]),tip:'Every ball is pushed around by hidden magnets of its own, so they never roll together. Steer one at a time.'},
   {w:0,name:'Compass',W:6,D:7,balls:bs(row(5,-2.9,.72)),holes:hs([[0,0],[-1.5,0],[1.5,0],[0,-1.5],[0,1.5]])},
   {w:0,name:'Orbit',W:6,D:7,balls:bs(ring(6,.62)),holes:hs(ring(6,2.1,.52))},
   {w:0,name:'Big and Small',W:6,D:7,balls:[...bs([[-.9,-2.8],[.9,-2.8]],2),...bs(row(3,-1.9,.7),0)],holes:[...hs([[0,-.1],[0,2.5]],2),...hs([[-2,1.2],[2,1.2],[-2,-1]],0)],tip:'Match marble to well by colour. A small marble can get stuck in a bigger well — tap it to pop it out.'},
@@ -597,6 +598,13 @@ function load(i){
     const dk=deckAt(x,z);
     balls.push({x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,h:dk?dk.top:0,deck:dk,ka:nb>1?.68+.64*order[k]/(nb-1):1,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:.55+k*.07,mesh,mat:m,q:new THREE.Quaternion()});
   });
+  // Hidden magnets: every ball is pushed away from two unseen spots of its own, so no two balls answer a tilt the
+  // same way and each has to be steered on its own. A magnet never sits near the ball's start or a well it fits.
+  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.walls.length>10?.5:1);
+  balls.forEach(b=>{b.mag=[];for(let t=0;MS&&t<80&&b.mag.length<2;t++){const x=(rnd()-.5)*(W-1),z=(rnd()-.5)*(D-1);
+    if(L.edges&&!inPoly(L.edges,x,z,.4))continue;
+    if(Math.hypot(x-b.x,z-b.z)<1.4||holes.some(h=>h.s===b.s&&Math.hypot(x-h.x,z-h.z)<1.9)||b.mag.some(m=>Math.hypot(x-m[0],z-m[1])<1.5))continue;
+    b.mag.push([x,z,MS*(.8+rnd()*.4)])}});
   for(let k=0;k<8;k++){const m=keep(new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));const r=new THREE.Mesh(rippleGeo,m);r.visible=false;board.add(r);ripples.push({mesh:r,t:1,size:1})}
   tilt.x=tilt.y=tilt.vx=tilt.vy=target.x=target.y=0;time=0;started=false;placed=0;
   const s=Math.max(W,D)*1.3;sun.shadow.camera.left=-s;sun.shadow.camera.right=s;sun.shadow.camera.top=s;sun.shadow.camera.bottom=-s;sun.shadow.camera.far=40;sun.shadow.camera.updateProjectionMatrix();
@@ -662,9 +670,10 @@ function step(dt){
     if(b.fallY>0||b.fvy){b.fvy-=26*dt;b.fallY+=b.fvy*dt;if(b.fallY<=0){b.fallY=0;if(b.fvy<-2.5){hit(-b.fvy*.6);b.fvy*=-.28}else b.fvy=0}}
     if(b.hop>0)b.hop=Math.max(0,b.hop-dt*.9);
     const damp=Math.exp(-(b.stone?1.3:.16*(1-.6*wild))*dt), e=b.stone?.2:.6+.25*wild;
-    {const w=.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w)*dt)*damp}
+    let mx=0,mz=0;for(const m of b.mag){const dx=b.x-m[0],dz=b.z-m[1],d=Math.hypot(dx,dz);if(d<MAGR&&d>.01){const f=m[2]*(1-d/MAGR)*(1-d/MAGR)/d;mx+=dx*f;mz+=dz*f}}
+    {const w=.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w+mz)*dt)*damp}
     {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild))*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
-    if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax,az)<(b.stone?.9:.35)){b.vx=b.vz=0}
+    if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax+mx,az+mz)<(b.stone?.9:.35)){b.vx=b.vz=0}
     b.x+=b.vx*dt;b.z+=b.vz*dt;
     if(L.edges){for(const E of L.edges){const d=(b.x-E[0])*E[2]+(b.z-E[1])*E[3];if(d<b.r){b.x+=E[2]*(b.r-d);b.z+=E[3]*(b.r-d);const vn=b.vx*E[2]+b.vz*E[3];if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*E[2];b.vz-=(1+e)*vn*E[3]}}}}else{
     const hw=hwB-b.r,hd=hdB-b.r;
