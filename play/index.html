@@ -92,6 +92,8 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 .walked{stroke:var(--gold);stroke-width:6;opacity:.85;filter:drop-shadow(0 0 6px rgba(255,205,80,.6))}
 .band{position:absolute;left:0;right:0;border-radius:34px;background:linear-gradient(160deg,var(--c1),var(--c2));opacity:.26}
 .chap{position:absolute;left:50%;transform:translate(-50%,-50%);padding:6px 14px;border-radius:99px;background:rgba(10,8,30,.82);border:1px solid var(--line);font:500 10px/1 var(--display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap}
+.soon{position:absolute;left:50%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:5px;padding:12px 18px;border-radius:20px;background:rgba(10,8,30,.82);border:1px dashed rgba(255,255,255,.3);color:rgba(255,255,255,.75);text-align:center;white-space:nowrap;z-index:1}
+.soon svg{width:18px;height:18px;opacity:.7;fill:none;stroke:currentColor;stroke-width:2}.soon b{font:600 13px/1.1 var(--display);letter-spacing:.04em;color:#fff}.soon span{font:400 11px/1.2 var(--text);opacity:.7}
 #trail .node{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;z-index:1}
 #trail .node i{position:absolute;right:-4px;top:-4px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px/1 var(--text);font-style:normal;color:#0c2a1e;background:#8dffc8;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 #trail .node.done{background:radial-gradient(circle at 32% 26%,#fff,#ffe08a 46%,#b27a10 125%);color:#3a2600}
@@ -169,8 +171,8 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
     <div class="choose" id="choose"></div>
   </section>
   <section id="upd" class="card off" aria-label="New levels">
-    <h3>New levels are waiting</h3><p>You are close to the last level in this version. Update the app to get the newest boards.</p>
-    <div class="stack"><button class="cta" id="uGo">Update the app</button><button id="uLater">Keep playing</button></div>
+    <h3>You cleared them all</h3><p>That was the last level in this version. More levels are on the way: update the app to get them as they arrive.</p>
+    <div class="stack"><button class="cta" id="uGo">Update the app</button><button id="uLater">Back to the map</button></div>
   </section>
   <section id="win" class="card off" aria-label="Level complete">
     <p id="wname"></p><h3>All marbles home</h3>
@@ -307,9 +309,13 @@ function buildMaze(L){
 }
 
 // ---------- generated chapters ----------
-// After the hand-made worlds, each theme repeats with freshly generated boards (same seed every time, so every
-// player gets the same levels) until the game has TOTAL_STAGES stages. Raise TOTAL_STAGES in an update to add more.
-const TOTAL_STAGES=240;
+// The level engine is endless: chapter c is built only from the number c (fixed seeds), so level N is the same board
+// for every player and in every version, however many levels are open. TOTAL_STAGES is how many are open in this
+// version; players see a "more levels coming" stop after the last one. Raise it in an update to open more.
+// Never change genLevel or the chapter loop in a way that alters levels already released: __mh.print(n) returns a
+// fingerprint of the first n levels, and FROZEN below is the released value to compare against before shipping.
+const TOTAL_STAGES=50;
+const FROZEN=[50,'cd923b1a'];
 const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
 const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
 const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
@@ -809,7 +815,7 @@ function win(){
     const s=$('#stars');s.innerHTML=STAR.repeat(3);[...s.children].forEach((el,k)=>{if(k<n)el.classList.add('gold');setTimeout(()=>{el.classList.add('in');if(k<n&&run===r){sfx('star');buzz('tick')}},350+k*230)});
     cls('#win',false)},1250);
 }
-const UPDATE_AT=10; // stages before the end at which players are told new levels come by updating
+const UPDATE_AT=0; // stages before the end at which players are told new levels come by updating
 function updatePrompt(then){track('update_prompt',{stage:L?L.stage+1:0});save.upd=1;persist();cls('#win',true);cls('#shade',false);cls('#upd',false);
   $('#uGo').onclick=()=>{sfx('tap');track('update_click',{});try{window.webkit.messageHandlers.mh.postMessage('update')}catch(e){}try{window.MarbleHushAndroid.update()}catch(e){}};
   $('#uLater').onclick=()=>{sfx('tap');cls('#upd',true);cls('#shade',true);then()}}
@@ -823,7 +829,7 @@ function openStage(k,asked){const s=STAGES[k];
 }
 function renderHome(){
   const cleared=STAGES.filter((_,k)=>stageDone(k)).length;$('#total').innerHTML='<b>✓</b> '+cleared+' of '+STAGES.length+' cleared';
-  const nk=nextStage(),map=$('#map'),N=STAGES.length,STEP=86,PB=74,PT=60,HT=PT+PB+(N-1)*STEP;
+  const nk=nextStage(),map=$('#map'),N=STAGES.length,STEP=86,PB=74,PT=170,HT=PT+PB+(N-1)*STEP;
   const X=k=>Math.sin(k*.8)*94, Y=k=>HT-PB-k*STEP;
   let way='',walked='';for(let t=0;t<=(N-1)*5;t++){const k=t/5,q=(t?'L':'M')+(150+X(k)).toFixed(1)+' '+Y(k).toFixed(1);way+=q;if(k<=nk)walked+=q}
   let h='<div id="trail" style="height:'+HT+'px">';
@@ -833,6 +839,7 @@ function renderHome(){
   STAGES.forEach((st,k)=>{const i=st[0],Lv=LEVELS[i],op=unlocked(i),done=save.best[i]!=null,isCur=k===nk&&!done;
     h+='<button class="node'+(Lv.boss?' boss':Lv.f?' hard':'')+(op?'':' lock')+(done?' done':'')+(isCur?' cur':'')+'" style="left:calc(50% + '+X(k).toFixed(1)+'px);top:'+Y(k)+'px"'+(op?' data-i="'+i+'"':' disabled')
       +' aria-label="'+(Lv.boss?'Boss level ':Lv.f?'Hard level ':'Level ')+Lv.label+' '+Lv.name+(op?done?' (cleared)':'':' (locked)')+'">'+(op?Lv.label:LOCK)+(Lv.boss?'<small>BOSS</small>':Lv.f?'<small>HARD</small>':'')+(done?'<i>✓</i>':'')+'</button>'});
+  h+='<div class="soon" style="top:'+(Y(N-1)-112)+'px">'+LOCK+'<b>More levels coming soon</b><span>Level '+(N+1)+' and beyond arrive in an update</span></div>';
   map.innerHTML=h+'</div>';
   map.onclick=e=>{const b=e.target.closest('button[data-i]');if(b){sfx('tap');buzz('tick');begin(+b.dataset.i)}};
   const dd=save.dailyDay===today(),st=save.dailyDay>=yesterday()?save.streak||0:0;
@@ -873,6 +880,8 @@ function frame(now){
   if(L)draw(dt,acc/H);
 }
 window.__mh={
+  print(n){let h=2166136261;const s=JSON.stringify(LEVELS.slice(0,n||FROZEN[0]).map(l=>[l.W,l.D,l.shape,l.balls,l.holes,l.walls,l.decks,l.portals,l.gates,l.plates,l.movers,l.f,l.boss]));for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)},
+  frozenOK(){return this.print(FROZEN[0])===FROZEN[1]},
   nativeTilt(){}, // phone-tilt control is switched off
   shot(i,secs){begin(i);intro=1;mode='play';balls.forEach(b=>b.drop=0);$('#splash').classList.remove('go');$('#hint').style.opacity=0;started=true;const t=[.5,.35];target.x=t[0];target.y=t[1];for(let k=0;k<(secs||1)*240;k++)step(H);tilt.x=t[0]*.5;tilt.y=t[1]*.5}, // store screenshots: jump to a board mid-play
   back(){ // returns true when the page handled the back press
