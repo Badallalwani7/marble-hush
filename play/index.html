@@ -85,6 +85,21 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 .pick{position:relative;padding:12px 8px;border-radius:18px;text-align:center;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4),0 6px 16px rgba(0,0,0,.25);transition:transform .15s;min-width:0}
 .pick b{display:block;font:700 12px/1.2 var(--display)}
 .pick span{display:block;margin-top:4px;font:500 11px/1.2 var(--text);color:var(--dim)}
+#trail{position:relative;width:min(100%,430px);margin:0 auto}
+#trail>svg{position:absolute;left:50%;top:0;margin-left:-150px;overflow:visible;pointer-events:none}
+#trail>svg path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.way{stroke:rgba(255,255,255,.2);stroke-width:5;stroke-dasharray:1 13}
+.walked{stroke:var(--gold);stroke-width:6;opacity:.85;filter:drop-shadow(0 0 6px rgba(255,205,80,.6))}
+.band{position:absolute;left:0;right:0;border-radius:34px;background:linear-gradient(160deg,var(--c1),var(--c2));opacity:.26}
+.chap{position:absolute;left:50%;transform:translate(-50%,-50%);padding:6px 14px;border-radius:99px;background:rgba(10,8,30,.82);border:1px solid var(--line);font:500 10px/1 var(--display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap}
+#trail .node{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;z-index:1}
+#trail .node i{position:absolute;right:-4px;top:-4px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px/1 var(--text);font-style:normal;color:#0c2a1e;background:#8dffc8;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+#trail .node.done{background:radial-gradient(circle at 32% 26%,#fff,#ffe08a 46%,#b27a10 125%);color:#3a2600}
+#trail .node.hard{width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:20px;background:radial-gradient(circle at 32% 26%,#ffd9cf,#ff5a4f 52%,#7a1220 125%);box-shadow:0 6px 18px rgba(255,80,70,.45),inset 0 0 0 2px rgba(255,255,255,.55)}
+#trail .node.boss{width:70px;height:70px;margin:-35px 0 0 -35px;font-size:19px}
+#trail .node.lock{background:rgb(22,19,56);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22);color:rgba(255,255,255,.5)}
+#trail .node.hard.lock{box-shadow:inset 0 0 0 2px rgba(255,110,100,.7)}#trail .node.boss.lock{box-shadow:inset 0 0 0 2px rgba(255,200,80,.75)}
+#trail .node.hard small{color:#ff9d94}#trail .node.lock small{opacity:.75}
 @keyframes ping{0%{transform:scale(.9);opacity:1}100%{transform:scale(1.2);opacity:0}}
 @keyframes rise{from{transform:translateY(24px);opacity:0}}
 #playbar{position:absolute;left:0;right:0;bottom:0;padding:0 var(--gr) calc(22px + var(--sb)) var(--gl);display:grid;justify-items:center;pointer-events:none}
@@ -191,6 +206,7 @@ const WORLDS=[
   {name:'Neon Arcade',about:'Doors between rooms', sky:['#0a0424','#40108a','#ff46a8'], floor:['#4a3a9a','#1e1450','#0c0726'], rim:'#05030f', accent:'#7dfff0', card:['#b0228c','#2a0f5a']},
   {name:'Clockwork Yard',about:'Switches and sliding walls', sky:['#1c1005','#96501a','#ffd98a'], floor:['#ffe6b0','#cf7c30','#4c2610'], rim:'#1c0f06', accent:'#ffe9b0', card:['#c9772e','#4a2410']},
   {name:'Frost Works',about:'Mazes',          sky:['#052c44','#1c92b4','#c6fff2'], floor:['#e6fbff','#4f9fc4','#10365a'], rim:'#081a2c', accent:'#d4f6ff', card:['#3f8fb5','#123a5c']},
+  {name:'Prism',about:'Odd-shaped tables',    sky:['#12324a','#3f7fa8','#8f6fc4'], floor:['#f3a8ff','#8a2fc0','#2c0a52'], rim:'#0a0714', accent:'#f6c4ff', card:['#8a3fc4','#1f2c66']},
 ];
 const row=(n,z,gap,x0=0)=>Array.from({length:n},(_,i)=>[x0+(i-(n-1)/2)*gap,z]);
 const ring=(n,r,a0=0)=>Array.from({length:n},(_,i)=>[Math.cos(a0+i/n*6.2832)*r,Math.sin(a0+i/n*6.2832)*r]);
@@ -249,6 +265,23 @@ const LEVELS=[
 ];
 function STAGES_SO_FAR(){let n=0,f=0;LEVELS.forEach(l=>{if(l.f){if(++f%2)n++}else n++});return n}
 function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+// ---------- table shapes ----------
+// A shaped table is a convex outline inside the W x D box. Edges carry an inward normal, so one test serves
+// level building (is this point on the table?) and physics (push a marble back from the rail).
+const SHAPES={
+  tri:(w,d)=>[[0,-d/2],[w/2,d/2],[-w/2,d/2]],
+  tri2:(w,d)=>[[-w/2,-d/2],[w/2,-d/2],[0,d/2]],
+  diamond:(w,d)=>[[0,-d/2],[w/2,0],[0,d/2],[-w/2,0]],
+  hex:(w,d)=>[[0,-d/2],[w/2,-d/4],[w/2,d/4],[0,d/2],[-w/2,d/4],[-w/2,-d/4]],
+  oct:(w,d)=>{const c=1.7,x=w/2,z=d/2;return[[-x+c,-z],[x-c,-z],[x,-z+c],[x,z-c],[x-c,z],[-x+c,z],[-x,z-c],[-x,-z+c]]},
+  round:(w,d)=>Array.from({length:40},(_,i)=>[Math.cos(i/40*6.2832)*w/2,Math.sin(i/40*6.2832)*d/2]),
+  trap:(w,d)=>[[-w*.24,-d/2],[w*.24,-d/2],[w/2,d/2],[-w/2,d/2]],
+  house:(w,d)=>[[0,-d/2],[w/2,-d*.12],[w*.36,d/2],[-w*.36,d/2],[-w/2,-d*.12]],
+};
+function edgesOf(P){let A=0;P.forEach((p,i)=>{const q=P[(i+1)%P.length];A+=p[0]*q[1]-q[0]*p[1]});const sg=A>0?1:-1;
+  return P.map((p,i)=>{const q=P[(i+1)%P.length],dx=q[0]-p[0],dz=q[1]-p[1],l=Math.hypot(dx,dz);return[p[0],p[1],-dz/l*sg,dx/l*sg]})}
+const inPoly=(E,x,z,m)=>E.every(e=>(x-e[0])*e[2]+(z-e[1])*e[3]>=m);
+const grow=(P,E,d)=>P.map((p,i)=>{const a=E[(i+P.length-1)%P.length],b=E[i],k=d/(1+a[2]*b[2]+a[3]*b[3]);return[p[0]-(a[2]+b[2])*k,p[1]-(a[3]+b[3])*k]});
 function buildMaze(L){
   const [C,Rw,seed]=L.maze, rnd=rng(seed), id=(c,r)=>r*C+c;
   const E=new Uint8Array(C*Rw), S=new Uint8Array(C*Rw), seen=new Uint8Array(C*Rw);
@@ -275,18 +308,18 @@ function buildMaze(L){
 // ---------- generated chapters ----------
 // After the hand-made worlds, each theme repeats with freshly generated boards (same seed every time, so every
 // player gets the same levels) until the game has TOTAL_STAGES stages. Raise TOTAL_STAGES in an update to add more.
-const TOTAL_STAGES=243;
+const TOTAL_STAGES=240;
 const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
 const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
 const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
-const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Pillar grid','Three floors'];
-const PAL_OF=[0,1,2,3,4,5,1,2]; // which palette each board type wears
-const FIRST_TIP={6:'A lattice of pillars. Thread the marbles through the lanes.',7:'Three floors. Marbles only go down, so fill the top wells first.'};
+const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Pillar grid','Three floors','Odd table'];
+const PAL_OF=[0,1,2,3,4,5,1,2,6]; // which palette each board type wears
+const FIRST_TIP={8:'A new table shape. The rails are angled, so marbles bank off them.',6:'A lattice of pillars. Thread the marbles through the lanes.',7:'Three floors. Marbles only go down, so fill the top wells first.'};
 function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per radius inside reg=[x0,x1,z0,z1], clear of circles and rects in `taken`
   const out=[];
   for(const r of rad){let ok=false;
     for(let t=0;t<300&&!ok;t++){const x=lerp(reg[0]+r,reg[1]-r,rnd()),z=lerp(reg[2]+r,reg[3]-r,rnd());
-      ok=taken.every(o=>{if(o.w){const qx=clamp(x,o.x-o.w/2,o.x+o.w/2),qz=clamp(z,o.z-o.d/2,o.z+o.d/2);return Math.hypot(x-qx,z-qz)>r+gap}return Math.hypot(x-o.x,z-o.z)>r+o.r+gap});
+      ok=taken.every(o=>{if(o.in)return o.in(x,z,r);if(o.w){const qx=clamp(x,o.x-o.w/2,o.x+o.w/2),qz=clamp(z,o.z-o.d/2,o.z+o.d/2);return Math.hypot(x-qx,z-qz)>r+gap}return Math.hypot(x-o.x,z-o.z)>r+o.r+gap});
       if(ok){taken.push({x,z,r});out.push([+x.toFixed(2),+z.toFixed(2)])}}
     if(!ok)return null}
   return out;
@@ -331,6 +364,14 @@ function genLevel(theme,diff,seed,hard){
       return mk(sz,bp,[[-side*2.4,-1.4],...low],{walls:GW,gates:[[0,0,2.4,WT]],plates:[[side*2.4,-1.4,0]],movers})}
     const rows=[[-1.5],[-1.5,.3],[-1.6,-.1,1.4]][Math.min(2,diff/5|0)];rows.forEach((z,k)=>{const dir=k%2?-1:1;movers.push([-2*dir,z,2.4,.2,4*dir,0,+((3+rnd()*1.5)*speed).toFixed(1),+rnd().toFixed(2)])});
     const hp=scatter(rnd,rw(sz),[-hw,hw,rows[rows.length-1]+.7,hd],[],.3);if(!hp)return null;return mk(sz,bp,hp,{movers})}
+  if(theme===8){ // shaped table: an odd outline, later with pillars and stones
+    const names=Object.keys(SHAPES),shape=names[rnd()*names.length|0],Ws=6.8,Ds=shape==='round'?6.8:7.6,E=edgesOf(SHAPES[shape](Ws,Ds)),walls=[];
+    n=Math.min(n,shape[0]==='t'?6:8);
+    for(let k=Math.min(4,Math.max(0,(diff-3)/3|0)+(hard?1:0));k>0;k--)for(let t=0;t<40;t++){const x=+lerp(-Ws/2,Ws/2,rnd()).toFixed(2),z=+lerp(-Ds/2,Ds/2,rnd()).toFixed(2);
+      if(!inPoly(E,x,z,1.35)||walls.some(o=>Math.hypot(x-o[0],z-o[1])<1.9))continue;walls.push([x,z,.7,.7]);break}
+    const sz=sizes(n),t=[{in:(x,z,r)=>inPoly(E,x,z,r+.14)},...walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}))],reg=[-Ws/2,Ws/2,-Ds/2,Ds/2],hp=scatter(rnd,rw(sz),reg,t,.3),bp=hp&&scatter(rnd,rb(sz),reg,t,.25);
+    if(!bp)return null;const Lv={W:Ws,D:Ds,shape,walls,balls:bp.map((q,k)=>[q[0],q[1],sz[k]]),holes:hp.map((q,k)=>[q[0],q[1],sz[k]])};
+    if(diff>5)Lv.balls.forEach(b=>{if(rnd()<.2)b[3]='s'});return Lv}
   if(theme===6){ // pillar grid: a lattice of blocks with a few lanes bricked up
     const sz=Array.from({length:n},()=>pick(kinds.filter(x=>x<3))),walls=[],xs=[-1.6,0,1.6],zs=[-2.4,-.8,.8,2.4];
     xs.forEach(x=>zs.forEach(z=>walls.push([x,z,.7,.7])));
@@ -347,47 +388,50 @@ function genLevel(theme,diff,seed,hard){
   return {maze:[C,Rw,seed],sz:Array.from({length:k},()=>pick(kinds.filter(x=>x<3)))};
 }
 // ---------- chapters ----------
-// Nine stages each: four levels, a pick-one-of-two hard fork, three more levels, then a boss. Board types are mixed
-// inside every chapter and one new type arrives per chapter; a type's hand-made boards (with their tips) are dealt first.
+// Ten stops each: four levels, a hard board, four more levels, then a boss. Board types are mixed inside every
+// chapter and one new type arrives per chapter; a type's hand-made boards (with their tips) are dealt first.
 const HAND=LEVELS.splice(0);HAND.forEach(l=>l.theme=l.w);
 const handQ=t=>HAND.filter(l=>l.theme===t&&!l.f&&!l.used), handF=t=>HAND.filter(l=>l.theme===t&&l.f&&!l.used);
-const CHAPTERS=[],seenT={};
-for(let c=0;c*9<TOTAL_STAGES;c++){
-  const rnd=rng(4242+c*17),types=[0,1,2,3,4,5,6,7].slice(0,Math.min(8,c+1)),fresh=c>=1&&c<=7?c:-1;
+const CHAPTERS=[],seenT={},ORDER=[0,8,1,2,3,4,5,6,7];
+for(let c=0;c*10<TOTAL_STAGES;c++){
+  const rnd=rng(4242+c*17),types=ORDER.slice(0,Math.min(9,c+2)),fresh=c>=1&&c<=7?ORDER[c+1]:-1;
   CHAPTERS.push({name:'Chapter '+(c+1),card:WORLDS[c%WORLDS.length].card});
-  const seq=fresh>=0?[fresh,fresh]:[];while(seq.length<7){const t=types[rnd()*types.length|0];if(types.length===1||seq[seq.length-1]!==t)seq.push(t)}
+  const seq=c===0?[0,0,0,8,0,0,8,8]:fresh>=0?[fresh,fresh]:[];while(seq.length<8){const t=types[rnd()*types.length|0];if(seq[seq.length-1]!==t)seq.push(t)}
   const put=(L,t,extra)=>{L.w=c;L.pal=PAL_OF[t];Object.assign(L,extra);if(!L.name){const nr=rng(c*31+LEVELS.length*7+3);L.name=NA[nr()*NA.length|0]+' '+NB[nr()*NB.length|0]}
     if(!seenT[t]){seenT[t]=1;if(!L.tip&&FIRST_TIP[t])L.tip=FIRST_TIP[t]}LEVELS.push(L)};
   const make=(t,k,hard,boss)=>{const diff=1+c*.6+k*.25+(hard?3:0)+(boss?5:0);let L=null;
     for(let a=0;a<40&&!L;a++)L=genLevel(t,diff|0,1000+c*97+k*13+a*7919,hard||boss);return L||genLevel(0,1,5000+c*7+k,false)};
   const regular=k=>{const t=seq.shift(),q=handQ(t)[0];if(q){q.used=1;put(q,t)}else put(make(t,k,false),t)};
   for(let k=0;k<4;k++)regular(k);
-  const ft=types.find(t=>handF(t).length>=2);
-  if(ft!=null)handF(ft).slice(0,2).forEach(q=>{q.used=1;put(q,ft)});
-  else for(let k=4;k<6;k++){const t=types[rnd()*types.length|0];put(make(t,k,true),t,{f:1,tag:HARDTAG[t]})}
-  for(let k=6;k<9;k++)regular(k);
+  const ft=types.find(t=>handF(t).length);
+  if(ft!=null){const q=handF(ft)[0];q.used=1;put(q,ft)}
+  else{const t=types[rnd()*types.length|0];put(make(t,4,true),t,{f:1,tag:HARDTAG[t]})}
+  for(let k=5;k<9;k++)regular(k);
   const bt=types[rnd()*types.length|0];put(make(bt,9,false,true),bt,{boss:1});
 }
 const norm=L=>{
   if(L.maze&&!L.balls)Object.assign(L,buildMaze(L));
+  if(L.shape){L.poly=SHAPES[L.shape](L.W,L.D);L.edges=edgesOf(L.poly)}
   L.walls=L.walls||[];L.decks=L.decks||[];L.portals=L.portals||[];L.gates=L.gates||[];L.plates=L.plates||[];L.movers=L.movers||[];
   const n=L.balls.length, base=L.maze?L.W*L.D*.5+4*n:5+3.5*n+(L.walls.length?5:0)+(L.decks.length?8:0);
   L.par=[Math.round(base*.7),Math.round(base*1.6)];
 };
 LEVELS.forEach(norm);
 // stages: a single level, or a fork of two
-const STAGES=[];LEVELS.forEach((L,i)=>{const p=STAGES[STAGES.length-1];if(L.f&&p&&LEVELS[p[0]].f&&LEVELS[p[0]].w===L.w&&p.length<2)p.push(i);else STAGES.push([i])});
+const STAGES=LEVELS.map((L,i)=>[i]);
 STAGES.forEach((s,k)=>s.forEach((i,j)=>{LEVELS[i].stage=k;LEVELS[i].label=(k+1)+(s.length>1?'ab'[j]:'')}));
 // the daily board: one extra hard board per calendar day, the same for everyone, kept outside the stage list
 const dayNum=d=>d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(), today=()=>dayNum(new Date()), yesterday=()=>dayNum(new Date(Date.now()-864e5));
 const DAILY=LEVELS.length;
-(()=>{const day=today(),t=day%8;let L=null;for(let a=0;a<40&&!L;a++)L=genLevel(t,7,day*3+a*101,true);L=L||genLevel(0,5,day,false);
+(()=>{const day=today(),t=day%9;let L=null;for(let a=0;a<40&&!L;a++)L=genLevel(t,7,day*3+a*101,true);L=L||genLevel(0,5,day,false);
   norm(L);Object.assign(L,{w:-1,pal:PAL_OF[t],name:'Daily board',label:'Daily',daily:day,stage:-1});LEVELS.push(L)})();
 
 // ---------- save ----------
-const KEY='marble-hush-v4';
+const KEY='marble-hush-v5';
 let save={best:{}};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.best)save=s}catch(e){}
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.best)save=s;
+  else{const o=JSON.parse(localStorage.getItem('marble-hush-v4')); // the level list changed: keep the count of stages cleared, not the old indexes
+    if(o&&o.best){const n=Math.min(STAGES.length-1,Object.keys(o.best).length);for(let k=0;k<n;k++)save.best[STAGES[k][0]]=999;save.streak=o.streak;save.dailyDay=o.dailyDay;localStorage.setItem(KEY,JSON.stringify(save))}}}catch(e){}
 const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}};
 const starsFor=(i,t)=>t==null?0:t<=LEVELS[i].par[0]?3:t<=LEVELS[i].par[1]?2:1;
 const stageDone=k=>STAGES[k].some(i=>save.best[i]!=null);
@@ -498,7 +542,8 @@ function load(i){
   const dark=keep(new THREE.MeshStandardMaterial({color:col(WD.rim).multiplyScalar(.5),roughness:.8}));
   const rimMat=keep(new THREE.MeshPhysicalMaterial({color:col(WD.rim),roughness:.5,metalness:.1,envMapIntensity:.3}));
   // floor with real wells cut through it
-  const sh=rrect(W,D,.02);cut(sh,hl.filter(h=>!h.deck),0,0);
+  const P=L.poly,outline=(o,pts)=>{pts.forEach((q,k)=>k?o.lineTo(q[0],-q[1]):o.moveTo(q[0],-q[1]));o.closePath();return o};
+  const sh=P?outline(new THREE.Shape(),P):rrect(W,D,.02);cut(sh,hl.filter(h=>!h.deck),0,0);
   const fg=keep(new THREE.ExtrudeGeometry(sh,{depth:WELL,bevelEnabled:false,curveSegments:40}));fg.rotateX(-Math.PI/2);fg.translate(0,-WELL,0);
   const floor=new THREE.Mesh(fg,[top,dark]);floor.receiveShadow=true;board.add(floor);
   // raised decks: solid terraces with their own wells; marbles can roll off the open edges
@@ -509,10 +554,11 @@ function load(i){
     const m=new THREE.Mesh(g,[deckTop,deckSide]);m.castShadow=m.receiveShadow=true;board.add(m);
     rects.push({x0:d.x0,x1:d.x1,z0:d.z0,z1:d.z1,deck:d})});
   // tray: frame + base
-  const fs=rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath();fs.holes.push(inner);
+  const fs=P?outline(new THREE.Shape(),grow(P,L.edges,RIM)):rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();if(P)outline(inner,P);else{inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath()}fs.holes.push(inner);
   const frg=keep(new THREE.ExtrudeGeometry(fs,{depth:WELL+.08+WALLH,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:3,curveSegments:16}));frg.rotateX(-Math.PI/2);frg.translate(0,-WELL-.08,0);
   const frame=new THREE.Mesh(frg,rimMat);frame.castShadow=frame.receiveShadow=true;board.add(frame);
-  const base=new THREE.Mesh(keep(new THREE.BoxGeometry(W,.08,D)),dark);base.position.y=-WELL-.04;board.add(base);
+  let bg;if(P){bg=keep(new THREE.ExtrudeGeometry(outline(new THREE.Shape(),P),{depth:.08,bevelEnabled:false}));bg.rotateX(-Math.PI/2);bg.translate(0,-.04,0)}else bg=keep(new THREE.BoxGeometry(W,.08,D));
+  const base=new THREE.Mesh(bg,dark);base.position.y=-WELL-.04;board.add(base);
   // walls stand on whatever surface is under them
   L.walls.forEach(([x,z,w,d])=>{const dk=deckAt(x,z),h=dk?dk.top:0;const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH,d)),rimMat);m.position.set(x,h+WALLH/2,z);m.castShadow=m.receiveShadow=true;board.add(m);rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h})});
   // wells
@@ -620,9 +666,10 @@ function step(dt){
     {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild))*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
     if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax,az)<(b.stone?.9:.35)){b.vx=b.vz=0}
     b.x+=b.vx*dt;b.z+=b.vz*dt;
+    if(L.edges){for(const E of L.edges){const d=(b.x-E[0])*E[2]+(b.z-E[1])*E[3];if(d<b.r){b.x+=E[2]*(b.r-d);b.z+=E[3]*(b.r-d);const vn=b.vx*E[2]+b.vz*E[3];if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*E[2];b.vz-=(1+e)*vn*E[3]}}}}else{
     const hw=hwB-b.r,hd=hdB-b.r;
     if(b.x<-hw){b.x=-hw;if(b.vx<0){hit(-b.vx,b);b.vx*=-e}}else if(b.x>hw){b.x=hw;if(b.vx>0){hit(b.vx,b);b.vx*=-e}}
-    if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}
+    if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}}
     // rolled off the edge of a deck: drop to whatever is below
     if(b.deck&&!inRect(b.deck,b.x,b.z)){const nd=deckAt(b.x,b.z,b.h),nh=nd?nd.top:0;b.fallY+=b.h-nh;b.h=nh;b.deck=nd;if(b.over)b.over.dwell=0;b.over=null;b.dip=b.dv=0;sfx('fall');
       if(mode==='play'&&!pads.length&&stranded()){mode='lost';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
@@ -748,7 +795,7 @@ function win(){
   setTimeout(()=>{if(run!==r||mode!=='won')return;
     $('#wname').textContent='Level '+L.label+' · '+L.name;$('#wtime').textContent=t.toFixed(1)+'s';
     $('#wbest').textContent=best&&prev!=null?'New best — was '+prev.toFixed(1)+'s':n<3?'Three stars under '+L.par[0]+'s':prev!=null&&!best?'Best '+prev.toFixed(1)+'s':'A perfect run';
-    const ns=L.daily?null:STAGES[L.stage+1];$('#wNext').textContent=!ns?'Level map':ns.length>1?'Choose next':LEVELS[ns[0]].boss?'Face the boss':'Next level';
+    const ns=L.daily?null:STAGES[L.stage+1];$('#wNext').textContent=!ns?'Level map':ns.length>1?'Choose next':LEVELS[ns[0]].boss?'Face the boss':LEVELS[ns[0]].f?'Take the hard one':'Next level';
     $('#win h3').textContent=L.daily?'Daily board cleared · streak '+save.streak:L.boss?'Boss beaten':'All marbles home';
     const s=$('#stars');s.innerHTML=STAR.repeat(3);[...s.children].forEach((el,k)=>{if(k<n)el.classList.add('gold');setTimeout(()=>{el.classList.add('in');if(k<n&&run===r){sfx('star');buzz('tick')}},350+k*230)});
     cls('#win',false)},1250);
@@ -767,25 +814,22 @@ function openStage(k,asked){const s=STAGES[k];
 }
 function renderHome(){
   const cleared=STAGES.filter((_,k)=>stageDone(k)).length;$('#total').innerHTML='<b>✓</b> '+cleared+' of '+STAGES.length+' cleared';
-  const nk=nextStage(),map=$('#map');map.innerHTML='';let curEl=null;
-  const stars=n=>n?'<small>✓ done</small>':'';
-  CHAPTERS.forEach((w,wi)=>{
-    const ids=LEVELS.map((l,i)=>l.w===wi?i:-1).filter(i=>i>=0),open=unlocked(ids[0]),fi=ids.findIndex(i=>LEVELS[i].f);
-    const sec=document.createElement('section');sec.className='world'+(open?'':' shut');sec.style.cssText='--c1:'+w.card[0]+';--c2:'+w.card[1]+';animation-delay:'+Math.min(wi,6)*70+'ms';
-    sec.innerHTML='<h2>'+w.name+'<small>Stages '+(LEVELS[ids[0]].stage+1)+'–'+(LEVELS[ids[ids.length-1]].stage+1)+'</small></h2><div class="steps"></div><div class="forkhead">Then pick one</div><div class="fork"></div><div class="steps"></div>';
-    const mk=(i,fork)=>{const b=document.createElement('button'),Lv=LEVELS[i],op=unlocked(i),isCur=Lv.stage===nk&&!stageDone(nk);
-      b.id='lv'+i;b.className=(fork?'pick':'node')+(Lv.boss?' boss':'')+(op?'':' lock')+(isCur?' cur':'');
-      b.setAttribute('aria-label',(Lv.boss?'Boss level ':'Level ')+Lv.label+' '+Lv.name+(op?'':' (locked)'));
-      b.innerHTML=fork?(op?'<b>'+Lv.name+'</b><span>'+Lv.tag+'</span>'+stars(starsFor(i,save.best[i])):LOCK+'<span>Hard board</span>')
-        :(op?Lv.label+(save.best[i]!=null?'<small>✓ done</small>':Lv.boss?'<small>BOSS</small>':''):LOCK);
-      if(op)b.onclick=()=>{sfx('tap');buzz('tick');begin(i)};if(isCur&&!curEl)curEl=sec;return b};
-    ids.forEach((i,k)=>{if(!LEVELS[i].f)sec.children[k<fi?1:4].appendChild(mk(i))});
-    const fk=ids.filter(i=>LEVELS[i].f);sec.children[3].appendChild(mk(fk[0],1));const or=document.createElement('i');or.textContent='or';sec.children[3].appendChild(or);sec.children[3].appendChild(mk(fk[1],1));
-    map.appendChild(sec)});
+  const nk=nextStage(),map=$('#map'),N=STAGES.length,STEP=86,PB=74,PT=60,HT=PT+PB+(N-1)*STEP;
+  const X=k=>Math.sin(k*.8)*94, Y=k=>HT-PB-k*STEP;
+  let way='',walked='';for(let t=0;t<=(N-1)*5;t++){const k=t/5,q=(t?'L':'M')+(150+X(k)).toFixed(1)+' '+Y(k).toFixed(1);way+=q;if(k<=nk)walked+=q}
+  let h='<div id="trail" style="height:'+HT+'px">';
+  CHAPTERS.forEach((w,c)=>{h+='<div class="band" style="top:'+(Y(c*10+9)-STEP/2)+'px;height:'+STEP*10+'px;--c1:'+w.card[0]+';--c2:'+w.card[1]+'"></div>'});
+  h+='<svg width="300" height="'+HT+'" viewBox="0 0 300 '+HT+'" aria-hidden="true"><path class="way" d="'+way+'"/><path class="walked" d="'+walked+'"/></svg>';
+  CHAPTERS.forEach((w,c)=>{h+='<div class="chap" style="top:'+(Y(c*10)+STEP/2)+'px">'+w.name+'</div>'});
+  STAGES.forEach((st,k)=>{const i=st[0],Lv=LEVELS[i],op=unlocked(i),done=save.best[i]!=null,isCur=k===nk&&!done;
+    h+='<button class="node'+(Lv.boss?' boss':Lv.f?' hard':'')+(op?'':' lock')+(done?' done':'')+(isCur?' cur':'')+'" style="left:calc(50% + '+X(k).toFixed(1)+'px);top:'+Y(k)+'px"'+(op?' data-i="'+i+'"':' disabled')
+      +' aria-label="'+(Lv.boss?'Boss level ':Lv.f?'Hard level ':'Level ')+Lv.label+' '+Lv.name+(op?done?' (cleared)':'':' (locked)')+'">'+(op?Lv.label:LOCK)+(Lv.boss?'<small>BOSS</small>':Lv.f?'<small>HARD</small>':'')+(done?'<i>✓</i>':'')+'</button>'});
+  map.innerHTML=h+'</div>';
+  map.onclick=e=>{const b=e.target.closest('button[data-i]');if(b){sfx('tap');buzz('tick');begin(+b.dataset.i)}};
   const dd=save.dailyDay===today(),st=save.dailyDay>=yesterday()?save.streak||0:0;
   $('#bDaily').innerHTML=(dd?'✓ Daily board done':'☀ Play today’s board')+(st?' · <b>'+st+'-day streak</b>':'');
-  const s=STAGES[nk];$('#bPlay').textContent=save.best[0]==null?'Play':stageDone(nk)?'Play again':s.length>1?'Choose your challenge':'Play level '+LEVELS[s[0]].label;
-  if(curEl)requestAnimationFrame(()=>{$('#map').scrollTop=curEl.offsetTop-$('#map').offsetTop-12});
+  const cu=LEVELS[STAGES[nk][0]];$('#bPlay').textContent=save.best[STAGES[0][0]]==null?'Play':stageDone(nk)?'Play again':(cu.boss?'Face the boss · ':cu.f?'Hard level ':'Play level ')+(cu.boss?cu.label:cu.label);
+  requestAnimationFrame(()=>{map.scrollTop=Y(nk)-map.clientHeight*.5});
 }
 function goHome(){mode='home';renderHome();cls('#home',false);cls('#hud',true);cls('#foot',true);hideCards();setSky(LEVELS[STAGES[nextStage()][0]].pal)}
 $('#bDaily').onclick=()=>{sfx('tap');buzz('tick');begin(DAILY)};
