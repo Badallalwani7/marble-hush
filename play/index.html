@@ -1,0 +1,837 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Marble Hush</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@500;700&display=swap">
+<style>
+/* One full-screen 3D stage over a sky gradient; a thin HUD; the level map and cards slide over it. */
+:root{
+  color-scheme:dark;
+  --fg:#f6f3ff; --dim:rgba(246,243,255,.62); --line:rgba(255,255,255,.18); --glass:rgba(255,255,255,.1);
+  --sheet:rgba(14,12,34,.74); --accent:#7ef5d9; --gold:#ffd76a;
+  --display:"Unbounded",ui-rounded,"SF Pro Rounded","Avenir Next",system-ui,sans-serif;
+  --text:"Manrope",ui-rounded,"SF Pro Rounded",system-ui,sans-serif;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --gl:max(16px,env(safe-area-inset-left,0px)); --gr:max(16px,env(safe-area-inset-right,0px));
+}
+[hidden]{display:none!important}
+.lite *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}.lite .card{background:rgba(14,12,34,.94)}.lite #shade{background:rgba(6,4,20,.72)}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:#0b0a22;color:var(--fg);font:500 15px/1.4 var(--text);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
+#app{position:fixed;inset:0;overflow:hidden}
+.sky{position:absolute;inset:0;opacity:0;transition:opacity 1.1s ease}
+.sky.on{opacity:1}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+
+/* HUD */
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;padding:calc(10px + var(--st)) var(--gr) 0 var(--gl);pointer-events:none;transition:opacity .35s,transform .35s}
+#hud.off{opacity:0;transform:translateY(-14px)}
+.round{pointer-events:auto;width:46px;height:46px;border-radius:50%;border:1.5px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:grid;place-items:center;transition:transform .12s,background .2s}
+.round:active{transform:scale(.9);background:rgba(255,255,255,.22)}
+.round svg,.ghost svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#status{text-align:center;padding-top:2px}
+#lvname{font:500 10px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+#count{font:700 26px/1.25 var(--display);font-variant-numeric:tabular-nums;display:inline-block}
+#count.pop{animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+#time,#stars,#wtime,#wbest{display:none!important}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.35);color:var(--accent)}100%{transform:scale(1)}}
+#foot{position:absolute;left:0;right:0;bottom:0;padding:0 var(--gr) calc(18px + var(--sb)) var(--gl);display:grid;justify-items:center;gap:10px;pointer-events:none;transition:opacity .35s}
+#foot.off{opacity:0}
+#hint{font:500 13px/1.35 var(--text);color:var(--dim);text-align:center;max-width:300px;transition:opacity .6s}
+#dial{width:46px;height:46px;border-radius:50%;border:1.5px solid var(--line);position:relative;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%)}
+#dial i{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+
+#splash{position:absolute;left:0;right:0;top:66%;text-align:center;pointer-events:none;opacity:0}
+#splash small{display:block;font:500 12px/1 var(--display);letter-spacing:.5em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;padding-left:.5em}
+#splash b{display:block;font:700 30px/1.1 var(--display);text-shadow:0 6px 30px rgba(0,0,0,.35)}
+#splash.go{animation:splash 2.1s cubic-bezier(.2,.9,.3,1) forwards}
+#splash.go small{animation:track 2.1s ease-out forwards}
+@keyframes splash{0%{opacity:0;transform:translateY(26px) scale(.86)}16%{opacity:1;transform:none}72%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-14px) scale(1.04)}}
+@keyframes track{0%{letter-spacing:1.2em}30%{letter-spacing:.5em}}
+/* Level map */
+.screen{position:absolute;inset:0;transition:opacity .4s ease,transform .5s cubic-bezier(.2,.8,.2,1)}
+.screen.off{opacity:0;pointer-events:none}
+#home{display:flex;flex-direction:column;background:linear-gradient(rgba(8,6,26,.3),rgba(8,6,26,.6))}
+#home.off{transform:scale(1.06)}
+#home header{padding:calc(22px + var(--st)) var(--gr) 10px var(--gl);text-align:center;flex:none}
+#home h1{margin:0;font:700 28px/1.05 var(--display);letter-spacing:-.01em}
+#home h1 span{display:block;font:500 10px/1 var(--display);letter-spacing:.3em;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
+#total{margin-top:10px;display:inline-flex;gap:6px;align-items:center;padding:6px 12px;border-radius:99px;background:var(--glass);border:1px solid var(--line);font:700 12px/1 var(--text);font-variant-numeric:tabular-nums}
+#total b{color:var(--gold)}
+.daily{display:block;margin:10px auto 0;padding:9px 16px;border-radius:99px;font:700 12px/1 var(--text);background:linear-gradient(90deg,rgba(255,215,106,.28),rgba(255,140,90,.28));border:1px solid rgba(255,215,106,.55)}
+.daily b{color:var(--gold)}.daily:active{transform:scale(.95)}
+.node.boss{background:radial-gradient(circle at 32% 26%,#fff6cf,#ffb52e 52%,#8a4b00 125%);color:#3a2200;box-shadow:0 6px 18px rgba(255,170,40,.45),inset 0 0 0 2px rgba(255,255,255,.6)}
+#map{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:4px var(--gr) 130px var(--gl);scrollbar-width:none;-webkit-mask-image:linear-gradient(transparent,#000 4%,#000 82%,transparent)}
+#map::-webkit-scrollbar{display:none}
+.world{width:min(100%,400px);margin:14px auto 0;padding:16px 14px 14px;border-radius:26px;background:linear-gradient(160deg,var(--c1),var(--c2));border:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.3);animation:rise .5s backwards cubic-bezier(.2,1.1,.4,1)}
+.world.shut{filter:saturate(.35) brightness(.7)}
+.world h2{margin:0 0 14px;font:700 14px/1 var(--display);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.world h2 small{font:500 11px/1 var(--text);color:var(--dim);letter-spacing:.02em}
+.steps{display:flex;justify-content:space-between;position:relative;margin-bottom:26px}
+.steps::before{content:"";position:absolute;left:8%;right:8%;top:50%;border-top:2px dotted rgba(255,255,255,.35)}
+.node{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font:700 17px/1 var(--display);background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.7),rgba(255,255,255,.22) 46%,rgba(0,0,0,.25) 120%);box-shadow:0 6px 16px rgba(0,0,0,.3),inset 0 0 0 2px rgba(255,255,255,.4);transition:transform .15s}
+.node:active,.pick:active{transform:scale(.92)}
+.node small,.pick small{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:5px;font-size:10px;letter-spacing:.5px;font-weight:700;color:var(--gold);white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.node small em,.pick small em{font-style:normal;color:rgba(255,255,255,.3)}
+.node.lock,.pick.lock{background:rgba(0,0,0,.2);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22);color:rgba(255,255,255,.55)}
+.lock svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2}
+.cur::after{content:"";position:absolute;inset:-7px;border-radius:inherit;border:2px solid #fff;animation:ping 1.6s infinite}
+.forkhead{display:flex;align-items:center;gap:10px;font:500 10px/1 var(--display);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+.forkhead::before,.forkhead::after{content:"";flex:1;height:1px;background:var(--line)}
+.fork{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:16px}
+.fork i{font:500 11px/1 var(--text);font-style:normal;color:var(--dim)}
+.pick{position:relative;padding:12px 8px;border-radius:18px;text-align:center;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.4),0 6px 16px rgba(0,0,0,.25);transition:transform .15s;min-width:0}
+.pick b{display:block;font:700 12px/1.2 var(--display)}
+.pick span{display:block;margin-top:4px;font:500 11px/1.2 var(--text);color:var(--dim)}
+@keyframes ping{0%{transform:scale(.9);opacity:1}100%{transform:scale(1.2);opacity:0}}
+@keyframes rise{from{transform:translateY(24px);opacity:0}}
+#playbar{position:absolute;left:0;right:0;bottom:0;padding:0 var(--gr) calc(22px + var(--sb)) var(--gl);display:grid;justify-items:center;pointer-events:none}
+.cta{pointer-events:auto;min-width:220px;padding:17px 28px;border-radius:99px;font:700 15px/1 var(--display);letter-spacing:.02em;color:#120f2e;background:linear-gradient(#fff,#d9d2ff);box-shadow:0 12px 34px rgba(0,0,0,.4),inset 0 -3px 0 rgba(0,0,0,.14);transition:transform .12s}
+.cta:active{transform:scale(.95)}
+
+/* Cards */
+#shade{position:absolute;inset:0;background:rgba(6,4,20,.5);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:opacity .3s}
+#shade.off{opacity:0;pointer-events:none}
+.card{position:absolute;left:var(--gl);right:var(--gr);bottom:calc(20px + var(--sb));margin:0 auto;max-width:400px;padding:26px 22px 20px;border-radius:30px;background:var(--sheet);border:1px solid var(--line);-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);text-align:center;transition:transform .55s cubic-bezier(.2,1.15,.3,1),opacity .3s;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.card.off{transform:translateY(115%);opacity:0;pointer-events:none}
+.card h3{margin:0 0 4px;font:700 22px/1.15 var(--display)}
+.card p{margin:0;color:var(--dim)}
+#stars{display:flex;justify-content:center;gap:10px;margin:16px 0 8px;height:52px}
+#stars svg{width:48px;height:48px;fill:rgba(255,255,255,.14);transform:scale(.4);opacity:0}
+#stars svg.in{animation:star .5s cubic-bezier(.3,1.7,.5,1) forwards}
+#stars svg.gold{fill:var(--gold);filter:drop-shadow(0 0 12px rgba(255,205,80,.8))}
+#stars svg:nth-child(2){margin-top:-8px}
+@keyframes star{to{transform:scale(1);opacity:1}}
+#wtime{font:700 30px/1.2 var(--display);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:10px;margin-top:18px}
+.row .cta{min-width:0;flex:1}
+.ghost{flex:none;width:52px;height:52px;border-radius:50%;border:1.5px solid var(--line);background:var(--glass);display:grid;place-items:center}
+.ghost:active{transform:scale(.92)}
+.stack{display:grid;gap:10px;margin-top:18px}
+.stack button{padding:15px;border-radius:18px;background:var(--glass);border:1px solid var(--line);font:700 14px/1 var(--text)}
+.stack button:active{background:rgba(255,255,255,.2)}
+.stack button.cta{border:0;color:#120f2e;background:linear-gradient(#fff,#d9d2ff)}
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.choose button{padding:18px 10px;border-radius:22px;background:linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.06));border:1.5px solid rgba(255,255,255,.35);transition:transform .12s}
+.choose button:active{transform:scale(.95)}
+.choose b{display:block;font:700 14px/1.2 var(--display)}
+.choose span{display:block;margin-top:6px;font:500 12px/1.2 var(--text);color:var(--dim)}
+.choose em{display:block;margin-bottom:8px;font:700 10px/1 var(--display);font-style:normal;letter-spacing:.16em;color:var(--gold)}
+@media (prefers-reduced-motion:reduce){.world,.cur::after{animation:none}}
+</style>
+
+<div id="app">
+  <div class="sky on" id="skyA"></div><div class="sky" id="skyB"></div>
+  <canvas id="gl"></canvas>
+
+  <div id="hud" class="off">
+    <button class="round" id="bPause" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+    <div id="status"><div id="lvname"></div><div id="count">0/0</div><div id="time">0.0</div></div>
+    <button class="round" id="bRestart" aria-label="Restart level"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5"/></svg></button>
+  </div>
+  <div id="splash"><small></small><b></b></div>
+  <div id="foot" class="off"><div id="hint"></div><div id="dial" aria-hidden="true"><i></i></div></div>
+
+  <section id="home" class="screen">
+    <header><h1><span>A quiet marble game</span>Marble Hush</h1><div><span id="total"></span></div><button id="bDaily" class="daily"></button></header>
+    <div id="map"></div>
+    <div id="playbar"><button class="cta" id="bPlay">Play</button></div>
+  </section>
+
+  <div id="shade" class="off"></div>
+  <section id="pause" class="card off" aria-label="Paused">
+    <h3>Paused</h3><p id="ptext"></p>
+    <div class="stack"><button class="cta" id="bResume">Resume</button><button id="bRetry">Restart level</button><button id="bMap">Level map</button></div>
+  </section>
+  <section id="lost" class="card off" aria-label="Stranded">
+    <h3>Stranded</h3><p>A marble dropped to where no well can take it.</p>
+    <div class="row"><button class="ghost" id="lMap" aria-label="Level map"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><button class="cta" id="lAgain">Try again</button></div>
+  </section>
+  <section id="forkc" class="card off" aria-label="Choose a hard level">
+    <h3>Pick your challenge</h3><p>Two hard boards. Beat either one to move on.</p>
+    <div class="choose" id="choose"></div>
+  </section>
+  <section id="upd" class="card off" aria-label="New levels">
+    <h3>New levels are waiting</h3><p>You are close to the last level in this version. Update the app to get the newest boards.</p>
+    <div class="stack"><button class="cta" id="uGo">Update the app</button><button id="uLater">Keep playing</button></div>
+  </section>
+  <section id="win" class="card off" aria-label="Level complete">
+    <p id="wname"></p><h3>All marbles home</h3>
+    <div id="stars"></div><div id="wtime"></div><p id="wbest"></p>
+    <div class="row">
+      <button class="ghost" id="wMap" aria-label="Level map"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <button class="ghost" id="wAgain" aria-label="Play again"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5"/></svg></button>
+      <button class="cta" id="wNext">Next level</button>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
+const easeOut=t=>1-Math.pow(1-t,3), easeBack=t=>{const c=1.4;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
+
+// ---------- constants ----------
+const SZ=[.18,.25,.32,.4];                         // marble radii: tiny, regular, big, huge
+const RW=SZ.map(r=>r*1.05);                    // matching well radii
+const TINT=['#ffd76a','#e6ecff','#ff6f9c','#6fd3ff'];
+const PR=.36, WELL=.26, G=36, MAXT=.3, WT=.14, WALLH=.28, H=1/240;
+const SEAT_D=.6, SEAT_V=1.3, SEAT_T=.14; // how centred, how slow, and for how long a marble must sit over a well to settle   // how fast a marble sinks while it is over an open well: fast marbles cross before they sink
+
+// ---------- worlds & levels ----------
+const WORLDS=[
+  {name:'Tidepool',   about:'Open water',     sky:['#1a2a8c','#4c6ff0','#a6e4ff'], floor:['#5ff0d6','#0b6f86','#082a4a'], rim:'#06182c', accent:'#8dffe4', card:['#17a79f','#0c4a66']},
+  {name:'Ember Court',about:'Walls and gaps', sky:['#3a0f52','#c93a72','#ffb86b'], floor:['#ffb37a','#d2475a','#4d1238'], rim:'#2a0a22', accent:'#ffd9a0', card:['#d9604f','#5e1c40']},
+  {name:'Night Garden',about:'Ledges — no way back up', sky:['#170c52','#5b38e0','#ff8fd2'], floor:['#cdb0ff','#6a48d8','#1c1256'], rim:'#110b36', accent:'#ecd6ff', card:['#7d5be6','#2a1b70']},
+  {name:'Neon Arcade',about:'Doors between rooms', sky:['#0a0424','#40108a','#ff46a8'], floor:['#4a3a9a','#1e1450','#0c0726'], rim:'#05030f', accent:'#7dfff0', card:['#b0228c','#2a0f5a']},
+  {name:'Clockwork Yard',about:'Switches and sliding walls', sky:['#1c1005','#96501a','#ffd98a'], floor:['#ffe6b0','#cf7c30','#4c2610'], rim:'#1c0f06', accent:'#ffe9b0', card:['#c9772e','#4a2410']},
+  {name:'Frost Works',about:'Mazes',          sky:['#052c44','#1c92b4','#c6fff2'], floor:['#e6fbff','#4f9fc4','#10365a'], rim:'#081a2c', accent:'#d4f6ff', card:['#3f8fb5','#123a5c']},
+];
+const row=(n,z,gap,x0=0)=>Array.from({length:n},(_,i)=>[x0+(i-(n-1)/2)*gap,z]);
+const ring=(n,r,a0=0)=>Array.from({length:n},(_,i)=>[Math.cos(a0+i/n*6.2832)*r,Math.sin(a0+i/n*6.2832)*r]);
+const bs=(pts,s=1,t)=>pts.map(p=>[p[0],p[1],s,t]), hs=(pts,s=1)=>pts.map(p=>[p[0],p[1],s]);
+const GW=[[-2.2,0,2,WT],[2.2,0,2,WT]]; // a wall with a doorway in the middle
+const LEDGE=[[0,-2.2,6.4,3.6,.55]];
+// Every world is five levels followed by a fork: two hard boards (f:1), beat either to move on.
+const LEVELS=[
+  {w:0,name:'First Light',W:5,D:6,balls:bs([[0,-2]]),holes:hs([[0,1.3]]),tip:'Drag to tilt; let go and the board levels out. A marble rolls straight over a well. It only drops in when you bring it to rest right on top.'},
+  {w:0,name:'Three Wishes',W:5.4,D:6.4,balls:bs(row(3,-2.5,.8)),holes:hs([[-1.4,.4],[1.4,.4],[0,1.9]])},
+  {w:0,name:'Compass',W:6,D:7,balls:bs(row(5,-2.9,.72)),holes:hs([[0,0],[-1.5,0],[1.5,0],[0,-1.5],[0,1.5]])},
+  {w:0,name:'Orbit',W:6,D:7,balls:bs(ring(6,.62)),holes:hs(ring(6,2.1,.52))},
+  {w:0,name:'Big and Small',W:6,D:7,balls:[...bs([[-.9,-2.8],[.9,-2.8]],2),...bs(row(3,-1.9,.7),0)],holes:[...hs([[0,-.1],[0,2.5]],2),...hs([[-2,1.2],[2,1.2],[-2,-1]],0)],tip:'Match marble to well by colour. A small marble can get stuck in a bigger well — tap it to pop it out.'},
+  {w:0,f:1,name:'Full House',tag:'8 marbles',W:6.4,D:7.6,balls:bs([...row(4,-3.2,.72),...row(4,-2.5,.72)]),holes:hs([...row(3,-.6,1.7),...row(2,.9,1.7),...row(3,2.4,1.7)])},
+  {w:0,f:1,name:'Mixed Bag',tag:'4 sizes',W:6.4,D:7.6,balls:[...bs([[-2.4,-3.1],[2.4,-3.1]],0),...bs([[-1.2,-3.1],[1.2,-3.1]],1),...bs([[-.6,-2.2],[.6,-2.2]],2),...bs([[0,-3.1]],3)],holes:[...hs([[0,3]],3),...hs([[-2.2,.2],[2.2,.2]],2),...hs([[-1.1,1.6],[1.1,1.6]],1),...hs([[-2.4,3],[2.4,3]],0)]},
+
+  {w:1,name:'The Gate',W:6.4,D:7.4,balls:bs(row(3,-2.8,.9)),holes:hs(row(3,2.5,1.6)),walls:[[-1.95,0,2.5,WT],[1.95,0,2.5,WT]],tip:'Walls now. Tip the marbles around them.'},
+  {w:1,name:'Switchback',W:6.4,D:7.6,balls:bs(row(4,-3.1,.75,-1.4)),holes:hs(row(4,3,1.3)),walls:[[-.8,-1.4,4.8,WT],[.8,1.2,4.8,WT]]},
+  {w:1,name:'Four Pillars',W:6.4,D:7.4,balls:bs(row(5,-3,.74)),holes:hs([[0,.1],[-2.5,.1],[2.5,.1],[-1.25,2.7],[1.25,2.7]]),walls:[[-1.25,-1.2,.8,.8],[1.25,-1.2,.8,.8],[-1.25,1.4,.8,.8],[1.25,1.4,.8,.8]]},
+  {w:1,name:'Twin Rooms',W:6.6,D:7.6,balls:bs([...row(3,-3.1,.72,-1.8),...row(3,-2.4,.72,-1.8)]),holes:hs([...row(3,2.9,.95,-1.75),[1.7,-2.8],[1.7,-.6],[1.7,1.6]]),walls:[[0,-.7,WT,6.2]]},
+  {w:1,name:'Narrow Pass',W:6.4,D:7.6,balls:[...bs([[-2,-3],[-1.2,-3]],0),...bs([[1,-3],[2,-3]],2)],holes:[...hs([[-2.2,2.6],[-.8,2.6]],2),...hs([[0,1.2],[2.3,2.8]],0)],walls:[[-1.72,0,2.96,WT],[1.02,0,1.56,WT]],tip:'Small marbles slip through gaps the big ones cannot.'},
+  {w:1,f:1,name:'The Sieve',tag:'6 marbles',W:6.6,D:8,balls:bs(row(6,-3.5,.74)),holes:hs([...row(3,3.3,1.9),...row(3,.55,2.2)]),walls:[...row(3,-1.9,2.2).map(p=>[p[0],p[1],1.2,WT]),...row(2,-.5,2.2).map(p=>[p[0],p[1],1.2,WT]),...row(2,1.9,2.2).map(p=>[p[0],p[1],1.2,WT])]},
+  {w:1,f:1,name:'Stone Yard',tag:'Heavy stones',W:6.4,D:7.6,balls:[...bs(row(3,-3,.9,-1.4),1,'s'),...bs(row(3,-3,.9,1.6),1)],holes:hs([...row(3,2.9,1.5),...row(3,.2,2.2)]),walls:[[-1.6,-1.3,.8,.8],[1.6,-1.3,.8,.8],[0,1.6,.8,.8]]},
+
+  {w:2,name:'The Ledge',W:6.4,D:8,decks:LEDGE,balls:bs(row(3,-3.2,.9)),holes:hs([[0,-1.3],[-1.5,2.4],[1.5,2.4]]),tip:'A marble that rolls off the ledge cannot climb back. Fill the upper well first.'},
+  {w:2,name:'Balcony',W:6.4,D:8,decks:LEDGE,balls:bs(row(4,-3.3,.8)),holes:hs([[-2.5,-1.2],[2.5,-1.2],[-1.6,2.6],[1.6,2.6]]),walls:[[-2.1,-.5,2.2,WT],[2.1,-.5,2.2,WT]]},
+  {w:2,name:'Two Steps',W:6.4,D:8,decks:[[0,-2.8,6.4,2.4,1],[0,-.5,6.4,2.2,.5]],balls:bs(row(4,-3.3,.8)),holes:hs([[2.4,-2.2],[-2.2,-.4],[-1.2,2.8],[1.4,2.4]])},
+  {w:2,name:'The Bridge',W:6.4,D:8,decks:[[0,0,2,8,.55]],balls:bs([[0,-3.4],[0,-2.7],[-.4,-1.9],[.4,-1.9]]),holes:hs([[0,3.2],[0,1.8],[-2.2,0],[2.2,0]])},
+  {w:2,name:'Sized Steps',W:6.4,D:8,decks:LEDGE,balls:[...bs([[-1.5,-3.2],[1.5,-3.2]],2),...bs([[-.4,-3.2],[.4,-3.2]],0)],holes:[...hs([[0,-1.2],[0,2.6]],2),...hs([[-2,1.5],[2,1.5]],0)]},
+  {w:2,f:1,name:'Three Tiers',tag:'3 floors',W:6.4,D:8.4,decks:[[0,-3.1,6.4,2.2,1],[0,-.9,6.4,2.2,.5]],balls:bs(row(6,-3.6,.75)),holes:hs([[-2.4,-2.7],[2.4,-2.7],[0,-.7],[-2.5,-.3],[-1.5,3],[1.5,3]])},
+  {w:2,f:1,name:'The Island',tag:'Edges all round',W:6.6,D:7.6,decks:[[0,0,3.2,3.2,.55]],balls:bs([[-1,-1],[1,-1],[-1,1],[1,1],[0,1.1]]),holes:hs([[0,-.2],[0,-1.1],[-2.6,-3.1],[2.6,3.1],[-2.6,3.1]])},
+
+  {w:3,name:'Doorway',W:6.4,D:8,walls:[[0,0,6.4,WT]],balls:bs([[-1,-2.6],[0,-2.6]]),holes:hs([[1.2,2.6],[2.4,1.4]]),portals:[[2.3,-1.2,-2.3,1.2]],tip:'The rooms are sealed. Roll onto a neon door to come out of its twin.'},
+  {w:3,name:'Four Rooms',W:6.4,D:8,walls:[[0,0,6.4,WT],[0,0,WT,8]],balls:bs([[-2.4,-3.2],[-1.6,-3.2],[-.8,-3.2]]),holes:hs([[1.6,-2],[1.6,2.6],[-1.6,2.2]]),portals:[[-2.4,-.8,2.5,-3.3],[.8,-.8,2.5,3.3],[.8,.8,-2.5,3.3]]},
+  {w:3,name:'Sorting Rooms',W:6.4,D:8,walls:[[0,0,6.4,WT],[0,2,WT,4]],balls:[...bs([[-1.2,-3],[-.4,-3]],0),...bs([[.6,-3],[1.6,-3]],2)],holes:[...hs([[-2,2],[-1,3.2]],0),...hs([[2,2],[1.1,3.2]],2)],portals:[[-2.5,-1,-2.5,.8],[2.5,-1,2.5,.8]]},
+  {w:3,name:'Upstairs',W:6.4,D:8,decks:LEDGE,balls:bs(row(3,3.2,.9)),holes:hs([[-1.5,-2.6],[1.5,-2.6],[0,1.4]]),portals:[[2.5,1,-2.5,-1.2]],tip:'This door leads up to the ledge.'},
+  {w:3,name:'Three Bands',W:6.4,D:8,walls:[[0,-1.4,6.4,WT],[0,1.4,6.4,WT]],balls:bs(row(4,-3.2,.8)),holes:hs([[0,0],[-1.2,3],[0,3],[1.2,3]]),portals:[[2.6,-2.4,-2.6,0],[2.6,0,-2.6,2.4]]},
+  {w:3,f:1,name:'Switchyard',tag:'Rooms + sizes',W:6.4,D:8,walls:[[0,0,6.4,WT],[0,0,WT,8]],balls:[...bs([[-2.6,-3.3],[-1.9,-3.3]],0),...bs([[-1.1,-3.2],[-2.4,-2.3]],2),...bs([[-.6,-2.2],[-1.5,-1.6]],1)],holes:[...hs([[1.4,-2.6],[-1.4,2.2]],0),...hs([[1.6,2],[-.8,3.3]],2),...hs([[1.7,-1.4],[.8,3.2]],1)],portals:[[-2.4,-.8,2.5,-3.3],[.8,-.8,2.5,3.3],[.8,.8,-2.5,3.3]]},
+  {w:3,f:1,name:'The Vault',tag:'Sealed vault',W:6.4,D:8,walls:[[0,-1.3,2.6+WT,WT],[0,1.3,2.6+WT,WT],[-1.3,0,WT,2.6],[1.3,0,WT,2.6]],balls:bs(row(5,-3.3,.8)),holes:hs([[-.5,0],[.5,0],[-2.4,3.2],[0,3.2],[2.4,3.2]]),portals:[[2.6,0,0,-.75],[0,.8,-2.6,0]]},
+
+  {w:4,name:'Sweeper',W:6.4,D:8,movers:[[-2,0,2.4,.2,4,0,4.5]],balls:bs(row(3,-3,.9)),holes:hs(row(3,3,1.6)),tip:'Some walls slide. Time your run.'},
+  {w:4,name:'Pistons',W:6.4,D:8,movers:[[-2,-1.3,2.4,.2,4,0,4],[2,1.3,2.4,.2,-4,0,4]],balls:bs(row(4,-3.3,.8)),holes:hs(row(4,3.2,1.3))},
+  {w:4,name:'Doorbell',W:6.4,D:8,walls:GW,gates:[[0,0,2.4,WT]],plates:[[-2.4,-1.4,0]],balls:bs(row(3,-3.2,.9)),holes:hs([[2.4,-1.4],[-1.4,2.8],[1.4,2.8]]),tip:'A marble resting on the glowing plate holds the gate open — as long as you tilt gently.'},
+  {w:4,name:'Latch Key',W:6.4,D:8,walls:GW,gates:[[0,0,2.4,WT]],plates:[[2.6,-3.4,0,1]],movers:[[1.7,-3.2,.2,1.4,0,1.8,3]],balls:bs(row(4,-3.2,.8,-1.2)),holes:hs(row(4,3,1.4)),tip:'A square plate stays pressed: touch it once and its gate is open for good.'},
+  {w:4,name:'Two Keys',W:6.4,D:8,walls:[[-2.2,-1.3,2,WT],[2.2,-1.3,2,WT],[-2.2,1.3,2,WT],[2.2,1.3,2,WT]],gates:[[0,-1.3,2.4,WT],[0,1.3,2.4,WT]],plates:[[-2.4,-2.2,0],[2.4,0,1]],balls:bs(row(4,-3.3,.8)),holes:hs([[2.4,-2.4],[-2.4,0],[-1.2,3],[1.2,3]])},
+  {w:4,f:1,name:'Engine Room',tag:'Three sliders',W:6.4,D:8,movers:[[-2,-1.6,2.4,.2,4,0,3.5],[2,0,2.4,.2,-4,0,4.2],[-2,1.6,2.4,.2,4,0,3]],balls:[...bs(row(3,-3.3,.9,-1.2),1),...bs(row(2,-3.3,1,1.6),2)],holes:[...hs(row(3,3.3,1.2,1)),...hs([[-2.2,3.2],[-1.1,2.4]],2)]},
+  {w:4,f:1,name:'Clock Tower',tag:'Gate + slider',W:6.4,D:8,walls:GW,gates:[[0,0,2.4,WT]],plates:[[-2.4,-1.4,0]],movers:[[-2,2,2.4,.2,4,0,3.6]],balls:bs(row(5,-3.2,.8)),holes:hs([[2.4,-1.4],...row(4,3.3,1.4)])},
+
+  {w:5,name:'Hedgerow',maze:[5,6,11],sz:[1,1,1],tip:'Find a way through.'},
+  {w:5,name:'Moth Paths',maze:[6,7,23],sz:[1,1,1]},
+  {w:5,name:'Lantern Walk',maze:[6,8,37],sz:[0,1,2,1]},
+  {w:5,name:'Moon Gate',maze:[7,8,41],sz:[1,1,2,0]},
+  {w:5,name:'Deep Arbor',maze:[7,9,59],sz:[0,0,1,2,2]},
+  {w:5,f:1,name:'The Long Hush',tag:'Vast maze',maze:[8,10,73],sz:[1,1,1,1,1,1]},
+  {w:5,f:1,name:'Sorting Hall',tag:'Maze + sizes',maze:[7,9,91],sz:[0,0,1,1,2,2]},
+];
+function STAGES_SO_FAR(){let n=0,f=0;LEVELS.forEach(l=>{if(l.f){if(++f%2)n++}else n++});return n}
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function buildMaze(L){
+  const [C,Rw,seed]=L.maze, rnd=rng(seed), id=(c,r)=>r*C+c;
+  const E=new Uint8Array(C*Rw), S=new Uint8Array(C*Rw), seen=new Uint8Array(C*Rw);
+  const st=[[0,0]];seen[0]=1;
+  while(st.length){
+    const [c,r]=st[st.length-1], o=[[1,0],[-1,0],[0,1],[0,-1]].filter(([a,b])=>c+a>=0&&c+a<C&&r+b>=0&&r+b<Rw&&!seen[id(c+a,r+b)]);
+    if(!o.length){st.pop();continue}
+    const [a,b]=o[rnd()*o.length|0];
+    if(a===1)E[id(c,r)]=1;else if(a===-1)E[id(c-1,r)]=1;else if(b===1)S[id(c,r)]=1;else S[id(c,r-1)]=1;
+    seen[id(c+a,r+b)]=1;st.push([c+a,r+b]);
+  }
+  for(let i=0;i<C*Rw;i++){const c=i%C,r=i/C|0; // a few extra doors so the maze has loops
+    if(c<C-1&&!E[i]&&rnd()<.12)E[i]=1;if(r<Rw-1&&!S[i]&&rnd()<.12)S[i]=1}
+  const walls=[];
+  for(let r=0;r<Rw-1;r++){let s=-1;for(let c=0;c<=C;c++){const w=c<C&&!S[id(c,r)];if(w&&s<0)s=c;if(!w&&s>=0){walls.push([(s+c)/2-C/2,r+1-Rw/2,c-s+WT,WT]);s=-1}}}
+  for(let c=0;c<C-1;c++){let s=-1;for(let r=0;r<=Rw;r++){const w=r<Rw&&!E[id(c,r)];if(w&&s<0)s=r;if(!w&&s>=0){walls.push([c+1-C/2,(s+r)/2-Rw/2,WT,r-s+WT]);s=-1}}}
+  const cells=[...Array(C*Rw).keys()];
+  for(let i=cells.length-1;i>0;i--){const j=rnd()*(i+1)|0;[cells[i],cells[j]]=[cells[j],cells[i]]}
+  const pt=i=>[i%C-C/2+.5,(i/C|0)-Rw/2+.5];
+  const top=cells.filter(i=>(i/C|0)<Rw*.4), bot=cells.filter(i=>(i/C|0)>=Rw*.5);
+  return {W:C,D:Rw,walls,balls:L.sz.map((s,k)=>[...pt(top[k]),s]),holes:L.sz.map((s,k)=>[...pt(bot[k]),s])};
+}
+
+// ---------- generated chapters ----------
+// After the hand-made worlds, each theme repeats with freshly generated boards (same seed every time, so every
+// player gets the same levels) until the game has TOTAL_STAGES stages. Raise TOTAL_STAGES in an update to add more.
+const TOTAL_STAGES=243;
+const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
+const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
+const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
+const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Pillar grid','Three floors'];
+const PAL_OF=[0,1,2,3,4,5,1,2]; // which palette each board type wears
+const FIRST_TIP={6:'A lattice of pillars. Thread the marbles through the lanes.',7:'Three floors. Marbles only go down, so fill the top wells first.'};
+function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per radius inside reg=[x0,x1,z0,z1], clear of circles and rects in `taken`
+  const out=[];
+  for(const r of rad){let ok=false;
+    for(let t=0;t<300&&!ok;t++){const x=lerp(reg[0]+r,reg[1]-r,rnd()),z=lerp(reg[2]+r,reg[3]-r,rnd());
+      ok=taken.every(o=>{if(o.w){const qx=clamp(x,o.x-o.w/2,o.x+o.w/2),qz=clamp(z,o.z-o.d/2,o.z+o.d/2);return Math.hypot(x-qx,z-qz)>r+gap}return Math.hypot(x-o.x,z-o.z)>r+o.r+gap});
+      if(ok){taken.push({x,z,r});out.push([+x.toFixed(2),+z.toFixed(2)])}}
+    if(!ok)return null}
+  return out;
+}
+function connected(W,D,walls,pts,r=.46){ // can a marble of radius r roll between every listed point?
+  const res=.1,nx=Math.round(W/res),nz=Math.round(D/res),seen=new Uint8Array(nx*nz);
+  const free=(a,b)=>{const x=-W/2+(a+.5)*res,z=-D/2+(b+.5)*res;if(Math.abs(x)>W/2-r||Math.abs(z)>D/2-r)return false;
+    return walls.every(w=>{const qx=clamp(x,w[0]-w[2]/2,w[0]+w[2]/2),qz=clamp(z,w[1]-w[3]/2,w[1]+w[3]/2);return Math.hypot(x-qx,z-qz)>r})};
+  const cell=p=>[clamp(Math.floor((p[0]+W/2)/res),0,nx-1),clamp(Math.floor((p[1]+D/2)/res),0,nz-1)];
+  const q=[cell(pts[0])];seen[q[0][1]*nx+q[0][0]]=1;
+  for(let i=0;i<q.length;i++){const [a,b]=q[i];for(const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const A=a+da,B=b+db;if(A<0||B<0||A>=nx||B>=nz||seen[B*nx+A]||!free(A,B))continue;seen[B*nx+A]=1;q.push([A,B])}}
+  return pts.every(p=>{const [a,b]=cell(p);for(let da=-1;da<=1;da++)for(let db=-1;db<=1;db++){const A=a+da,B=b+db;if(A>=0&&B>=0&&A<nx&&B<nz&&seen[B*nx+A])return true}return false});
+}
+function genLevel(theme,diff,seed,hard){
+  const rnd=rng(seed),W=6.4,D=8,hw=W/2,hd=D/2,pick=a=>a[rnd()*a.length|0];
+  let n=clamp(3+(diff/3|0)+(hard?2:0),3,9);
+  const kinds=diff<3?[1]:diff<6?[1,2]:diff<10?[0,1,2]:[0,1,2,3];
+  const sizes=k=>Array.from({length:k},()=>pick(kinds)), rw=sz=>sz.map(x=>RW[x]), rb=sz=>sz.map(x=>SZ[x]);
+  const mk=(sz,bp,hp,extra)=>Object.assign({W,D,balls:bp.map((p,k)=>[p[0],p[1],sz[k]]),holes:hp.map((p,k)=>[p[0],p[1],sz[k]])},extra);
+  if(theme===0){const sz=sizes(n),t=[],hp=scatter(rnd,rw(sz),[-hw,hw,-hd,hd],t,.3),bp=hp&&scatter(rnd,rb(sz),[-hw,hw,-hd,hd],t,.3);
+    if(!bp)return null;const L=mk(sz,bp,hp);if(diff>5)L.balls.forEach(b=>{if(rnd()<.2)b[3]='s'});return L}
+  if(theme===1){const walls=[],nb=3+Math.min(3,diff/4|0)+(hard?1:0);
+    for(let k=0;k<nb;k++)for(let t=0;t<60;t++){const len=1.4+rnd()*2.2,hor=rnd()<.55;let w=hor?len:WT,d=hor?WT:len,x=lerp(-hw+w/2,hw-w/2,rnd()),z=lerp(-hd+d/2,hd-d/2,rnd());
+      if(hor){if(x-w/2+hw<1)x=-hw+w/2;if(hw-x-w/2<1)x=hw-w/2;if(Math.abs(z)>hd-1.1)continue}else{if(z-d/2+hd<1)z=-hd+d/2;if(hd-z-d/2<1)z=hd-d/2;if(Math.abs(x)>hw-1.1)continue}
+      if(walls.some(o=>Math.abs(x-o[0])<(w+o[2])/2+1&&Math.abs(z-o[1])<(d+o[3])/2+1))continue;walls.push([+x.toFixed(2),+z.toFixed(2),+w.toFixed(2),+d.toFixed(2)]);break}
+    const sz=sizes(n),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),hp=scatter(rnd,rw(sz),[-hw,hw,-hd,hd],t,.25),bp=hp&&scatter(rnd,rb(sz),[-hw,hw,-hd,hd],t,.25);
+    if(!bp||!connected(W,D,walls,[...bp,...hp]))return null;return mk(sz,bp,hp,{walls})}
+  if(theme===2){n=Math.min(n,7);const dd=+(2.8+rnd()*1.2).toFixed(1),edge=-hd+dd,walls=[];
+    if(diff>3&&rnd()<.65){const gw=1.6+rnd()*.8,gx=lerp(-hw+1+gw/2,hw-1-gw/2,rnd()),l=gx-gw/2+hw,r=hw-gx-gw/2;walls.push([-hw+l/2,edge-.12,l,WT],[hw-r/2,edge-.12,r,WT])}
+    const sz=sizes(n),kTop=1+(rnd()*(n-2)|0),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}));
+    const top=scatter(rnd,rw(sz.slice(0,kTop)),[-hw,hw,-hd+1.15,edge-.3],t,.25),low=top&&scatter(rnd,rw(sz.slice(kTop)),[-hw,hw,edge+.4,hd],t,.3);
+    if(!low)return null;const bp=row(n,-hd+.55,.86);return mk(sz,bp,[...top,...low],{walls,decks:[[0,-hd+dd/2,W,dd,.55]]})}
+  if(theme===3){const four=diff>4&&rnd()<.6||hard;n=Math.min(n,four?6:7);const sz=sizes(n);
+    const walls=four?[[0,0,W,WT],[0,0,WT,D]]:[[0,0,W,WT]],portals=four?[[-2.4,-.8,2.5,-3.3],[.8,-.8,2.5,3.3],[.8,.8,-2.5,3.3]]:[[pick([-2.4,2.4]),-1.1,pick([-2.4,2.4]),1.1]];
+    const rooms=four?[[-hw,-.1,-hd,-.1],[.1,hw,-hd,-.1],[.1,hw,.1,hd],[-hw,-.1,.1,hd]]:[[-hw,hw,-hd,-.1],[-hw,hw,.1,hd]];
+    const t=[...walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),...portals.flatMap(p=>[{x:p[0],z:p[1],r:PR+.1},{x:p[2],z:p[3],r:PR+.1}])],hp=[];
+    for(let k=0;k<n;k++){const room=rooms[k<rooms.length-1?k+1:1+(rnd()*(rooms.length-1)|0)],q=scatter(rnd,[RW[sz[k]]],room,t,.25);if(!q)return null;hp.push(q[0])}
+    const bp=scatter(rnd,rb(sz),rooms[0],t,.2);if(!bp)return null;return mk(sz,bp,hp,{walls,portals})}
+  if(theme===4){n=Math.min(n,7);const sz=sizes(n),gate=diff>4&&rnd()<.5,movers=[],bp=row(n,-hd+.6,.86),speed=hard?.75:1;
+    if(gate){const side=pick([-1,1]),t=[],low=scatter(rnd,rw(sz.slice(1)),[-hw,hw,diff>7?2.5:.7,hd],t,.3);if(!low)return null;
+      if(diff>7)movers.push([-2,1.7,2.4,.2,4,0,+(3.2+rnd()).toFixed(1)*speed]);
+      return mk(sz,bp,[[-side*2.4,-1.4],...low],{walls:GW,gates:[[0,0,2.4,WT]],plates:[[side*2.4,-1.4,0]],movers})}
+    const rows=[[-1.5],[-1.5,.3],[-1.6,-.1,1.4]][Math.min(2,diff/5|0)];rows.forEach((z,k)=>{const dir=k%2?-1:1;movers.push([-2*dir,z,2.4,.2,4*dir,0,+((3+rnd()*1.5)*speed).toFixed(1),+rnd().toFixed(2)])});
+    const hp=scatter(rnd,rw(sz),[-hw,hw,rows[rows.length-1]+.7,hd],[],.3);if(!hp)return null;return mk(sz,bp,hp,{movers})}
+  if(theme===6){ // pillar grid: a lattice of blocks with a few lanes bricked up
+    const sz=Array.from({length:n},()=>pick(kinds.filter(x=>x<3))),walls=[],xs=[-1.6,0,1.6],zs=[-2.4,-.8,.8,2.4];
+    xs.forEach(x=>zs.forEach(z=>walls.push([x,z,.7,.7])));
+    for(let k=Math.min(7,1+(diff/2|0));k>0;k--){if(rnd()<.5){const i=rnd()*2|0,j=rnd()*4|0;walls.push([(xs[i]+xs[i+1])/2,zs[j],.9,WT])}else{const i=rnd()*3|0,j=rnd()*3|0;walls.push([xs[i],(zs[j]+zs[j+1])/2,WT,.9])}}
+    const t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),hp=scatter(rnd,rw(sz),[-hw,hw,-hd,hd],t,.18),bp=hp&&scatter(rnd,rb(sz),[-hw,hw,-hd,hd],t,.18);
+    if(!bp||!connected(W,D,walls,[...bp,...hp],.36))return null;return mk(sz,bp,hp,{walls})}
+  if(theme===7){ // tower: three floors stepping down toward you, wells on every floor
+    n=clamp(n,4,7);const sz=sizes(n),fd=D/3,decks=[[0,-hd+fd/2,W,fd,1],[0,-hd+fd*1.5,W,fd,.5]],cnt=[1,1,1],t=[],portals=[];
+    for(let k=3;k<n;k++)cnt[rnd()*3|0]++;
+    if(diff>6&&rnd()<.5){const p=[pick([-2.5,2.5]),hd-.8,pick([-2.5,2.5]),-hd+fd-.55];portals.push(p);t.push({x:p[0],z:p[1],r:PR+.1},{x:p[2],z:p[3],r:PR+.1})} // a lift back to the top
+    const hp=[];let o=0;for(let f=0;f<3;f++){const q=scatter(rnd,rw(sz.slice(o,o+cnt[f])),[-hw,hw,-hd+fd*f+(f?.4:1.15),-hd+fd*(f+1)-(f<2?.35:0)],t,.25);if(!q)return null;hp.push(...q);o+=cnt[f]}
+    return mk(sz,row(n,-hd+.55,.86),hp,{decks,portals})}
+  const C=5+Math.min(3,diff/4|0),Rw=Math.min(10,C+1+(rnd()<.5?1:0)+(hard?1:0)),k=Math.min(6,3+(diff/4|0));
+  return {maze:[C,Rw,seed],sz:Array.from({length:k},()=>pick(kinds.filter(x=>x<3)))};
+}
+// ---------- chapters ----------
+// Nine stages each: four levels, a pick-one-of-two hard fork, three more levels, then a boss. Board types are mixed
+// inside every chapter and one new type arrives per chapter; a type's hand-made boards (with their tips) are dealt first.
+const HAND=LEVELS.splice(0);HAND.forEach(l=>l.theme=l.w);
+const handQ=t=>HAND.filter(l=>l.theme===t&&!l.f&&!l.used), handF=t=>HAND.filter(l=>l.theme===t&&l.f&&!l.used);
+const CHAPTERS=[],seenT={};
+for(let c=0;c*9<TOTAL_STAGES;c++){
+  const rnd=rng(4242+c*17),types=[0,1,2,3,4,5,6,7].slice(0,Math.min(8,c+1)),fresh=c>=1&&c<=7?c:-1;
+  CHAPTERS.push({name:'Chapter '+(c+1),card:WORLDS[c%WORLDS.length].card});
+  const seq=fresh>=0?[fresh,fresh]:[];while(seq.length<7){const t=types[rnd()*types.length|0];if(types.length===1||seq[seq.length-1]!==t)seq.push(t)}
+  const put=(L,t,extra)=>{L.w=c;L.pal=PAL_OF[t];Object.assign(L,extra);if(!L.name){const nr=rng(c*31+LEVELS.length*7+3);L.name=NA[nr()*NA.length|0]+' '+NB[nr()*NB.length|0]}
+    if(!seenT[t]){seenT[t]=1;if(!L.tip&&FIRST_TIP[t])L.tip=FIRST_TIP[t]}LEVELS.push(L)};
+  const make=(t,k,hard,boss)=>{const diff=1+c*.6+k*.25+(hard?3:0)+(boss?5:0);let L=null;
+    for(let a=0;a<40&&!L;a++)L=genLevel(t,diff|0,1000+c*97+k*13+a*7919,hard||boss);return L||genLevel(0,1,5000+c*7+k,false)};
+  const regular=k=>{const t=seq.shift(),q=handQ(t)[0];if(q){q.used=1;put(q,t)}else put(make(t,k,false),t)};
+  for(let k=0;k<4;k++)regular(k);
+  const ft=types.find(t=>handF(t).length>=2);
+  if(ft!=null)handF(ft).slice(0,2).forEach(q=>{q.used=1;put(q,ft)});
+  else for(let k=4;k<6;k++){const t=types[rnd()*types.length|0];put(make(t,k,true),t,{f:1,tag:HARDTAG[t]})}
+  for(let k=6;k<9;k++)regular(k);
+  const bt=types[rnd()*types.length|0];put(make(bt,9,false,true),bt,{boss:1});
+}
+const norm=L=>{
+  if(L.maze&&!L.balls)Object.assign(L,buildMaze(L));
+  L.walls=L.walls||[];L.decks=L.decks||[];L.portals=L.portals||[];L.gates=L.gates||[];L.plates=L.plates||[];L.movers=L.movers||[];
+  const n=L.balls.length, base=L.maze?L.W*L.D*.5+4*n:5+3.5*n+(L.walls.length?5:0)+(L.decks.length?8:0);
+  L.par=[Math.round(base*.7),Math.round(base*1.6)];
+};
+LEVELS.forEach(norm);
+// stages: a single level, or a fork of two
+const STAGES=[];LEVELS.forEach((L,i)=>{const p=STAGES[STAGES.length-1];if(L.f&&p&&LEVELS[p[0]].f&&LEVELS[p[0]].w===L.w&&p.length<2)p.push(i);else STAGES.push([i])});
+STAGES.forEach((s,k)=>s.forEach((i,j)=>{LEVELS[i].stage=k;LEVELS[i].label=(k+1)+(s.length>1?'ab'[j]:'')}));
+// the daily board: one extra hard board per calendar day, the same for everyone, kept outside the stage list
+const dayNum=d=>d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(), today=()=>dayNum(new Date()), yesterday=()=>dayNum(new Date(Date.now()-864e5));
+const DAILY=LEVELS.length;
+(()=>{const day=today(),t=day%8;let L=null;for(let a=0;a<40&&!L;a++)L=genLevel(t,7,day*3+a*101,true);L=L||genLevel(0,5,day,false);
+  norm(L);Object.assign(L,{w:-1,pal:PAL_OF[t],name:'Daily board',label:'Daily',daily:day,stage:-1});LEVELS.push(L)})();
+
+// ---------- save ----------
+const KEY='marble-hush-v4';
+let save={best:{}};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.best)save=s}catch(e){}
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}};
+const starsFor=(i,t)=>t==null?0:t<=LEVELS[i].par[0]?3:t<=LEVELS[i].par[1]?2:1;
+const stageDone=k=>STAGES[k].some(i=>save.best[i]!=null);
+const UNLOCK_ALL=false; // testing: every board is open. Set false to require clearing the previous stage.
+const unlocked=i=>UNLOCK_ALL||LEVELS[i].stage===0||stageDone(LEVELS[i].stage-1);
+const nextStage=()=>{let k=0;while(k<STAGES.length-1&&stageDone(k))k++;return k};
+
+// ---------- sound & haptics ----------
+// Sound files are loaded from sounds/<name>.mp3 when they exist; missing files simply stay silent.
+const SFX={};let muted=false;
+['tap','drop','knock','win','star','whoosh','fall'].forEach(n=>{try{const a=new Audio();a.preload='auto';a.addEventListener('canplaythrough',()=>{SFX[n]=a},{once:true});a.src='sounds/'+n+'.mp3'}catch(e){}});
+function sfx(n,vol=1){const a=SFX[n];if(!a||muted)return;try{const c=a.cloneNode();c.volume=clamp(vol,0,1);c.play().catch(()=>{})}catch(e){}}
+const buzz=k=>{try{window.webkit.messageHandlers.mh.postMessage(k)}catch(e){}try{window.MarbleHushAndroid.buzz(k)}catch(e){}};
+// Analytics: every event is handed to the native app (iOS bridge, or an Android bridge named MarbleHushAndroid),
+// which forwards it to whichever analytics service is wired in there. Nothing is sent from the page itself.
+function track(event,props){const m=Object.assign({event,version:TOTAL_STAGES},props);
+  try{window.webkit.messageHandlers.mh.postMessage(m)}catch(e){}
+  try{window.MarbleHushAndroid.track(JSON.stringify(m))}catch(e){}}
+
+// ---------- renderer ----------
+const canvas=$('#gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(34,1,0.1,300);
+const col=h=>new THREE.Color(h).convertSRGBToLinear();
+
+(function env(){ // a smooth light dome: bright overhead fading to a dim horizon, so marbles get soft glossy highlights
+  const s=new THREE.Scene(),g=new THREE.SphereGeometry(50,48,32),p=g.attributes.position,c=new Float32Array(p.count*3);
+  for(let i=0;i<p.count;i++){const y=p.getY(i)/50,x=p.getX(i)/50;const up=Math.pow(Math.max(0,y),3.2)*3.2,hz=Math.exp(-Math.pow(y/.16,2))*.22,side=Math.max(0,-x)*.25;
+    c[i*3]=.05+up+hz*.9+side*.7;c[i*3+1]=.05+up+hz*.95+side*.85;c[i*3+2]=.09+up+hz*1.2+side}
+  g.setAttribute('color',new THREE.BufferAttribute(c,3));
+  s.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+  const pm=new THREE.PMREMGenerator(renderer);scene.environment=pm.fromScene(s,0.04).texture;pm.dispose();
+})();
+scene.add(new THREE.HemisphereLight(0xdfe6ff,0x2a2050,0.3));
+const sun=new THREE.DirectionalLight(0xffffff,0.72);
+sun.position.set(-5,13,4);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-0.0006;sun.shadow.normalBias=0.02;sun.shadow.radius=5;
+scene.add(sun,sun.target);
+const flash=new THREE.PointLight(0xffffff,0,30,1.6);flash.position.set(0,3,0);scene.add(flash);
+
+const motes=(()=>{const n=220,p=new Float32Array(n*3);for(let i=0;i<n;i++){p[i*3]=(Math.random()-.5)*60;p[i*3+1]=-6-Math.random()*26;p[i*3+2]=(Math.random()-.5)*70}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));
+  const m=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:0.13,transparent:true,opacity:.55,depthWrite:false}));scene.add(m);return m})();
+
+// sparkles
+const SP=420, spPos=new Float32Array(SP*3), spCol=new Float32Array(SP*3), spSize=new Float32Array(SP), spAl=new Float32Array(SP);
+const spVel=new Float32Array(SP*3), spLife=new Float32Array(SP), spMax=new Float32Array(SP);let spNext=0;
+const spGeo=new THREE.BufferGeometry();
+spGeo.setAttribute('position',new THREE.BufferAttribute(spPos,3));spGeo.setAttribute('color',new THREE.BufferAttribute(spCol,3));
+spGeo.setAttribute('aSize',new THREE.BufferAttribute(spSize,1));spGeo.setAttribute('aAlpha',new THREE.BufferAttribute(spAl,1));
+const sparks=new THREE.Points(spGeo,new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  vertexShader:'attribute float aSize;attribute float aAlpha;attribute vec3 color;varying vec3 vC;varying float vA;void main(){vC=color;vA=aAlpha;vec4 mv=modelViewMatrix*vec4(position,1.);gl_PointSize=aSize*(300./-mv.z);gl_Position=projectionMatrix*mv;}',
+  fragmentShader:'varying vec3 vC;varying float vA;void main(){vec2 p=gl_PointCoord-.5;float d=length(p);float a=smoothstep(.5,0.,d);float s=max(0.,1.-abs(p.x)*9.)*max(0.,1.-abs(p.y)*2.2)+max(0.,1.-abs(p.y)*9.)*max(0.,1.-abs(p.x)*2.2);gl_FragColor=vec4(vC*(a*a+s),1.)*vA;}'}));
+sparks.frustumCulled=false;scene.add(sparks);
+const tmpC=new THREE.Color(), white=new THREE.Color(0xffffff);
+function burst(pos,c,n,speed,up){
+  for(let k=0;k<n;k++){const i=spNext;spNext=(spNext+1)%SP;const a=Math.random()*6.2832,e=Math.random()*1.2+.15,v=speed*(.35+Math.random()*.65);
+    spPos[i*3]=pos.x;spPos[i*3+1]=pos.y+.1;spPos[i*3+2]=pos.z;
+    spVel[i*3]=Math.cos(a)*Math.cos(e)*v;spVel[i*3+1]=Math.sin(e)*v*up;spVel[i*3+2]=Math.sin(a)*Math.cos(e)*v;
+    tmpC.set(c).convertSRGBToLinear().lerp(white,Math.random()*.6);spCol[i*3]=tmpC.r;spCol[i*3+1]=tmpC.g;spCol[i*3+2]=tmpC.b;
+    spSize[i]=.14+Math.random()*.3;spMax[i]=spLife[i]=.6+Math.random()*.9}
+}
+function stepSparks(dt){
+  for(let i=0;i<SP;i++){if(spLife[i]<=0){spAl[i]=0;continue}
+    spLife[i]-=dt;const d=Math.exp(-1.6*dt);spVel[i*3]*=d;spVel[i*3+2]*=d;spVel[i*3+1]=spVel[i*3+1]*d-2.2*dt;
+    spPos[i*3]+=spVel[i*3]*dt;spPos[i*3+1]+=spVel[i*3+1]*dt;spPos[i*3+2]+=spVel[i*3+2]*dt;
+    const t=Math.max(0,spLife[i]/spMax[i]);spAl[i]=Math.min(1,t*2.2)*(.75+.25*Math.sin(spLife[i]*30))}
+  spGeo.attributes.position.needsUpdate=spGeo.attributes.color.needsUpdate=spGeo.attributes.aSize.needsUpdate=spGeo.attributes.aAlpha.needsUpdate=true;
+}
+
+// ---------- board ----------
+const rig=new THREE.Group(), board=new THREE.Group();rig.add(board);scene.add(rig);
+const ballGeo=SZ.map(r=>new THREE.SphereGeometry(r,44,30)), stoneGeo=SZ.map(r=>new THREE.IcosahedronGeometry(r*1.08,0));
+const ringGeo=RW.map(r=>{const g=new THREE.RingGeometry(r+.015,r+.07,48);g.rotateX(-Math.PI/2);return g});
+const rippleGeo=new THREE.RingGeometry(.86,1,48);rippleGeo.rotateX(-Math.PI/2);
+let cur=-1,L=null,WD=null,balls=[],holes=[],rects=[],decks=[],pads=[],gates=[],plates=[],movers=[],ripples=[],own=[];
+const PLR=.42, HOLD=5.2; // plate radius, and how hard a plate grips a resting marble
+const PCOL=['#3ff5ff','#ff4fd8','#b6ff3a'];
+const padRing=new THREE.RingGeometry(PR-.07,PR,48),padDisc=new THREE.CircleGeometry(PR-.07,40),padBeam=new THREE.CylinderGeometry(PR-.03,PR-.03,.7,40,1,true);padRing.rotateX(-Math.PI/2);padDisc.rotateX(-Math.PI/2);
+const tilt={x:0,y:0,vx:0,vy:0}, target={x:0,y:0};
+let mode='home',time=0,started=false,placed=0,fit=10,run=0,wild=0;const tries={};
+
+function rrect(w,d,r){const s=new THREE.Shape(),x=-w/2,y=-d/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+d-r);s.quadraticCurveTo(x+w,y+d,x+w-r,y+d);s.lineTo(x+r,y+d);s.quadraticCurveTo(x,y+d,x,y+d-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s}
+function floorTex(c){
+  const cv=document.createElement('canvas');cv.width=cv.height=512;const g=cv.getContext('2d');
+  const lg=g.createLinearGradient(0,0,0,512);lg.addColorStop(0,c[0]);lg.addColorStop(.45,c[1]);lg.addColorStop(1,c[2]);g.fillStyle=lg;g.fillRect(0,0,512,512);
+  const rg=g.createRadialGradient(256,150,10,256,256,380);rg.addColorStop(0,'rgba(255,255,255,.08)');rg.addColorStop(.5,'rgba(255,255,255,0)');rg.addColorStop(1,'rgba(0,0,0,.35)');g.fillStyle=rg;g.fillRect(0,0,512,512);
+  const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;
+}
+function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[]}
+const keep=o=>(own.push(o),o);
+const inRect=(d,x,z)=>x>d.x0&&x<d.x1&&z>d.z0&&z<d.z1;
+const deckAt=(x,z,below=1e9)=>{let best=null;for(const d of decks)if(d.top<below-.01&&inRect(d,x,z)&&(!best||d.top>best.top))best=d;return best};
+function load(i){
+  clearBoard();cur=i;L=LEVELS[i];WD=WORLDS[L.pal];run++;
+  wild=L.boss?Math.max(.25,1-((tries[i]||1)-1)*.25):0; // a boss plays wild, and calms down a little with each retry
+  const {W,D}=L, RIM=.12;
+  document.documentElement.style.setProperty('--accent',WD.accent);
+  L.decks.forEach(([x,z,w,d,h])=>decks.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,top:h,x,z,w,d}));
+  const hl=L.holes.map(([x,z,s])=>{const d=deckAt(x,z);return{x,z,s,h:d?d.top:0,deck:d}});
+  const cut=(sh,list,ox,oz)=>list.forEach(h=>{const p=new THREE.Path();p.absarc(h.x-ox,-(h.z-oz),RW[h.s],0,6.2832,true);sh.holes.push(p)});
+  const tex=keep(floorTex(WD.floor));tex.repeat.set(1/W,1/D);tex.offset.set(.5,.5);
+  const top=keep(new THREE.MeshPhysicalMaterial({map:tex,roughness:.5,metalness:0,envMapIntensity:.14}));
+  const dark=keep(new THREE.MeshStandardMaterial({color:col(WD.rim).multiplyScalar(.5),roughness:.8}));
+  const rimMat=keep(new THREE.MeshPhysicalMaterial({color:col(WD.rim),roughness:.5,metalness:.1,envMapIntensity:.3}));
+  // floor with real wells cut through it
+  const sh=rrect(W,D,.02);cut(sh,hl.filter(h=>!h.deck),0,0);
+  const fg=keep(new THREE.ExtrudeGeometry(sh,{depth:WELL,bevelEnabled:false,curveSegments:40}));fg.rotateX(-Math.PI/2);fg.translate(0,-WELL,0);
+  const floor=new THREE.Mesh(fg,[top,dark]);floor.receiveShadow=true;board.add(floor);
+  // raised decks: solid terraces with their own wells; marbles can roll off the open edges
+  const deckTop=keep(new THREE.MeshPhysicalMaterial({map:tex,color:new THREE.Color(1.25,1.25,1.25),roughness:.45,metalness:0,envMapIntensity:.16}));
+  const deckSide=keep(new THREE.MeshStandardMaterial({color:col(WD.floor[2]).multiplyScalar(.7),roughness:.7}));
+  decks.forEach(d=>{const s=new THREE.Shape();s.moveTo(d.x0,-d.z1);s.lineTo(d.x1,-d.z1);s.lineTo(d.x1,-d.z0);s.lineTo(d.x0,-d.z0);s.closePath();cut(s,hl.filter(h=>h.deck===d),0,0);
+    const g=keep(new THREE.ExtrudeGeometry(s,{depth:d.top,bevelEnabled:false,curveSegments:40}));g.rotateX(-Math.PI/2);
+    const m=new THREE.Mesh(g,[deckTop,deckSide]);m.castShadow=m.receiveShadow=true;board.add(m);
+    rects.push({x0:d.x0,x1:d.x1,z0:d.z0,z1:d.z1,deck:d})});
+  // tray: frame + base
+  const fs=rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath();fs.holes.push(inner);
+  const frg=keep(new THREE.ExtrudeGeometry(fs,{depth:WELL+.08+WALLH,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:3,curveSegments:16}));frg.rotateX(-Math.PI/2);frg.translate(0,-WELL-.08,0);
+  const frame=new THREE.Mesh(frg,rimMat);frame.castShadow=frame.receiveShadow=true;board.add(frame);
+  const base=new THREE.Mesh(keep(new THREE.BoxGeometry(W,.08,D)),dark);base.position.y=-WELL-.04;board.add(base);
+  // walls stand on whatever surface is under them
+  L.walls.forEach(([x,z,w,d])=>{const dk=deckAt(x,z),h=dk?dk.top:0;const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH,d)),rimMat);m.position.set(x,h+WALLH/2,z);m.castShadow=m.receiveShadow=true;board.add(m);rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h})});
+  // wells
+  hl.forEach(h=>{
+    const c=col(TINT[h.s]);
+    const r=new THREE.Mesh(ringGeo[h.s],keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false})));r.position.set(h.x,h.h+.006,h.z);board.add(r);
+    const glow=new THREE.Mesh(keep(new THREE.CircleGeometry(RW[h.s],32)),keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.1,blending:THREE.AdditiveBlending,depthWrite:false})));glow.rotation.x=-Math.PI/2;glow.position.set(h.x,h.h-WELL+.01,h.z);board.add(glow);
+    const plug=new THREE.Mesh(keep(new THREE.CircleGeometry(RW[h.s],32)),dark);plug.rotation.x=-Math.PI/2;plug.position.set(h.x,h.h-WELL,h.z);board.add(plug);
+    holes.push({x:h.x,z:h.z,s:h.s,h:h.h,R:RW[h.s],ball:null,ring:r,glow,lit:0,dwell:0,col:c});
+  });
+  // gates sink into the floor while their plate is pressed; square plates latch for good
+  L.gates.forEach(([x,z,w,d],k)=>{const c=col(PCOL[k%3]);
+    const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH,d)),keep(new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.3),emissive:c,emissiveIntensity:.6,roughness:.4})));
+    m.position.set(x,WALLH/2,z);m.castShadow=true;board.add(m);const g={mesh:m,open:0,latched:false};gates.push(g);
+    rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h:0,gate:g})});
+  L.plates.forEach(([x,z,gi,latch])=>{const c=col(PCOL[gi%3]);
+    const geo=latch?keep(new THREE.PlaneGeometry(PLR*1.7,PLR*1.7)):keep(new THREE.CircleGeometry(PLR,40));
+    const disc=new THREE.Mesh(geo,keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false})));disc.rotation.x=-Math.PI/2;disc.position.set(x,.012,z);board.add(disc);
+    plates.push({x,z,g:gates[gi],latch:!!latch,disc,on:false})});
+  // sliding walls
+  const mvMat=keep(new THREE.MeshStandardMaterial({color:col(WD.accent).multiplyScalar(.45),emissive:col(WD.accent),emissiveIntensity:.25,roughness:.35,metalness:.3}));
+  L.movers.forEach(([x,z,w,d,dx,dz,T,ph])=>{const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH*1.15,d)),mvMat);m.position.set(x,WALLH*.575,z);m.castShadow=true;board.add(m);
+    const r={x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h:0,vx:0,vz:0};rects.push(r);movers.push({x,z,w,d,dx,dz,T,ph:ph||0,mesh:m,r,cx:x,cz:z})});
+  // neon doors: step on one and come out of its twin
+  L.portals.forEach(([x1,z1,x2,z2],k)=>{const c=col(PCOL[k%3]),pair=[[x1,z1],[x2,z2]].map(([x,z])=>{const dk=deckAt(x,z),h=dk?dk.top:0;
+      const add=(g,o,y)=>{const m=new THREE.Mesh(g,keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})));m.position.set(x,h+y,z);board.add(m);return m};
+      return{x,z,h,deck:dk,tint:PCOL[k%3],ring:add(padRing,.5,.012),disc:add(padDisc,.08,.01),beam:add(padBeam,.02,.2),flash:0}});
+    pair[0].twin=pair[1];pair[1].twin=pair[0];pads.push(...pair)});
+  // marbles and stones
+  const nb=L.balls.length,rnd=rng(977+i*31),order=[...Array(nb).keys()];for(let a=nb-1;a>0;a--){const c=rnd()*(a+1)|0;[order[a],order[c]]=[order[c],order[a]]}
+  L.balls.forEach(([x,z,s,t],k)=>{
+    const stone=t==='s', c=col(TINT[s]);
+    const m=keep(stone?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.25,roughness:.38,flatShading:true,envMapIntensity:.9,emissive:c,emissiveIntensity:0})
+      :new THREE.MeshPhysicalMaterial({color:c.clone().multiplyScalar(s===1?.18:.5),metalness:.85,roughness:.15,clearcoat:1,clearcoatRoughness:.05,envMapIntensity:1.5,emissive:c,emissiveIntensity:0}));
+    const mesh=new THREE.Mesh(stone?stoneGeo[s]:ballGeo[s],m);mesh.castShadow=true;board.add(mesh);
+    const dk=deckAt(x,z);
+    balls.push({x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,h:dk?dk.top:0,deck:dk,ka:nb>1?.68+.64*order[k]/(nb-1):1,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:.55+k*.07,mesh,mat:m,q:new THREE.Quaternion()});
+  });
+  for(let k=0;k<8;k++){const m=keep(new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));const r=new THREE.Mesh(rippleGeo,m);r.visible=false;board.add(r);ripples.push({mesh:r,t:1,size:1})}
+  tilt.x=tilt.y=tilt.vx=tilt.vy=target.x=target.y=0;time=0;started=false;placed=0;
+  const s=Math.max(W,D)*1.3;sun.shadow.camera.left=-s;sun.shadow.camera.right=s;sun.shadow.camera.top=s;sun.shadow.camera.bottom=-s;sun.shadow.camera.far=40;sun.shadow.camera.updateProjectionMatrix();
+  $('#lvname').textContent=L.label+' · '+L.name;updateHUD();placeCamera();setSky(L.pal);
+}
+function setSky(w){const s=WORLDS[w].sky,g=`radial-gradient(130% 55% at 50% 36%,rgba(255,255,255,.26),rgba(255,255,255,0) 62%),linear-gradient(${s[0]},${s[1]} 52%,${s[2]})`,A=$('#skyA'),B=$('#skyB'),on=A.classList.contains('on')?A:B,off=on===A?B:A;
+  if(on.dataset.w===String(w))return;if(on.dataset.w==null){on.style.background=g;on.dataset.w=w;return}off.style.background=g;off.dataset.w=w;off.classList.add('on');on.classList.remove('on')}
+function placeCamera(){if(!L)return;const a=camera.aspect,t=Math.tan(camera.fov*Math.PI/360);fit=Math.max((L.W/2+.7)/(t*a)+L.D*.2,(L.D/2+2.3)/t*.7)}
+let vw=0,vh=0;
+function resize(){vw=canvas.clientWidth;vh=canvas.clientHeight;if(!vw||!vh)return;renderer.setSize(vw,vh,false);camera.aspect=vw/vh;camera.updateProjectionMatrix();placeCamera()}
+addEventListener('resize',resize);
+
+// ---------- physics ----------
+function ripple(x,y,z,size,c){const r=ripples.find(r=>r.t>=1)||ripples[0];r.t=0;r.size=size;r.mesh.position.set(x,y+.03,z);r.mesh.material.color.set(c).convertSRGBToLinear();r.mesh.visible=true}
+const wp=new THREE.Vector3();
+const RED=new THREE.Color(1,.02,.05);
+function capture(b,h){
+  b.hole=h;h.ball=b;b.sink=0;b.over=null;h.dwell=0;b.wrong=h.s!==b.s;
+  if(b.wrong){ // a smaller marble has dropped into a bigger well: it blocks the well until it is tapped out
+    h.ring.material.color.copy(RED);h.ring.material.blending=THREE.NormalBlending;h.ring.material.needsUpdate=true;h.ring.scale.setScalar(1.14);ripple(h.x,h.h,h.z,1.2,'#ff2a3a');sfx('knock');buzz('tick');
+    const t=$('#hint');t.textContent='Wrong well. Tap the marble to pop it out.';t.style.opacity=1;return}
+  placed++;updateHUD(true);
+  ripple(h.x,h.h,h.z,1.5,TINT[h.s]);board.localToWorld(wp.set(h.x,h.h+.1,h.z));burst(wp,TINT[h.s],22,3.2,1.5);
+  sfx('drop');buzz('drop');
+  if(placed===balls.length)win();
+}
+function pop(b){
+  const h=b.hole,a=Math.random()*6.2832;h.ball=null;h.ring.material.color.copy(h.col);h.ring.material.blending=THREE.AdditiveBlending;h.ring.material.needsUpdate=true;h.ring.scale.setScalar(1);
+  b.hole=null;b.wrong=false;b.sink=0;b.cool=.8;b.vx=Math.cos(a)*1.8;b.vz=Math.sin(a)*1.8;b.fallY=.02;b.fvy=4.6;
+  ripple(h.x,h.h,h.z,1.3,TINT[b.s]);sfx('tap');buzz('drop');$('#hint').style.opacity=0;
+}
+const pv=new THREE.Vector3();
+function pick(cx,cy){ // the wrongly seated marble under a tap, if any
+  const rc=canvas.getBoundingClientRect();let best=null,bd=44;
+  for(const b of balls){if(!b.wrong)continue;board.localToWorld(pv.set(b.x,b.h,b.z)).project(camera);
+    const d=Math.hypot((pv.x+1)/2*rc.width+rc.left-cx,(1-pv.y)/2*rc.height+rc.top-cy);if(d<bd){bd=d;best=b}}
+  return best;
+}
+// A marble can only go down. It is stranded when, for its size, the marbles at or below some height outnumber the open wells there.
+function stranded(){
+  for(let s=0;s<SZ.length;s++){
+    const bh=balls.filter(b=>(!b.hole||b.wrong)&&b.s===s).map(b=>b.h), wh=holes.filter(h=>(!h.ball||h.ball.wrong)&&h.s===s).map(h=>h.h);
+    for(const t of new Set(bh))if(bh.filter(v=>v<=t+.01).length>wh.filter(v=>v<=t+.01).length)return true;
+  }
+  return false;
+}
+function step(dt){
+  const k=150,c=21;tilt.vx+=((target.x-tilt.x)*k-tilt.vx*c)*dt;tilt.vy+=((target.y-tilt.y)*k-tilt.vy*c)*dt;tilt.x+=tilt.vx*dt;tilt.y+=tilt.vy*dt;
+  if(mode!=='play'&&mode!=='won'&&mode!=='lost')return;
+  const ax=G*Math.sin(tilt.x*MAXT), az=G*Math.sin(tilt.y*MAXT), hwB=L.W/2, hdB=L.D/2;
+  if(started&&mode==='play')time+=dt;clock+=dt;
+  for(const m of movers){const a=(clock/m.T+m.ph)*6.2832,u=.5-.5*Math.cos(a),du=.5*Math.sin(a)*6.2832/m.T,r=m.r;
+    m.cx=m.x+m.dx*u;m.cz=m.z+m.dz*u;r.x0=m.cx-m.w/2;r.x1=m.cx+m.w/2;r.z0=m.cz-m.d/2;r.z1=m.cz+m.d/2;r.vx=m.dx*du;r.vz=m.dz*du}
+  for(const g of gates)g.want=g.latched?1:0;
+  for(const p of plates){let on=false;
+    for(const b of balls){if(b.hole||b.h!==0||b.fallY>.05)continue;const dx=p.x-b.x,dz=p.z-b.z,d=Math.hypot(dx,dz);if(d>=PLR)continue;on=true;
+      if(!p.latch){const f=HOLD*d/PLR*dt,dd=Math.exp(-3*dt);b.vx=(b.vx+dx/(d||1)*f)*dd;b.vz=(b.vz+dz/(d||1)*f)*dd}} // the plate cups a resting marble
+    if(on&&!p.on){sfx('tap');buzz('tick')}p.on=on;if(on){p.g.want=1;if(p.latch)p.g.latched=true}}
+  for(const g of gates)g.open+=(g.want-g.open)*Math.min(1,dt*9);
+  for(const b of balls){
+    b.px=b.x;b.pz=b.z;
+    if(b.hole){const h=b.hole;b.sink=Math.min(1,b.sink+dt*5);b.x+=(h.x-b.x)*Math.min(1,dt*22);b.z+=(h.z-b.z)*Math.min(1,dt*22);b.vx=b.vz=0;continue}
+    if(b.fallY>0||b.fvy){b.fvy-=26*dt;b.fallY+=b.fvy*dt;if(b.fallY<=0){b.fallY=0;if(b.fvy<-2.5){hit(-b.fvy*.6);b.fvy*=-.28}else b.fvy=0}}
+    if(b.hop>0)b.hop=Math.max(0,b.hop-dt*.9);
+    const damp=Math.exp(-(b.stone?1.3:.16*(1-.6*wild))*dt), e=b.stone?.2:.6+.25*wild;
+    {const w=.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w)*dt)*damp}
+    {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild))*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
+    if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax,az)<(b.stone?.9:.35)){b.vx=b.vz=0}
+    b.x+=b.vx*dt;b.z+=b.vz*dt;
+    const hw=hwB-b.r,hd=hdB-b.r;
+    if(b.x<-hw){b.x=-hw;if(b.vx<0){hit(-b.vx,b);b.vx*=-e}}else if(b.x>hw){b.x=hw;if(b.vx>0){hit(b.vx,b);b.vx*=-e}}
+    if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}
+    // rolled off the edge of a deck: drop to whatever is below
+    if(b.deck&&!inRect(b.deck,b.x,b.z)){const nd=deckAt(b.x,b.z,b.h),nh=nd?nd.top:0;b.fallY+=b.h-nh;b.h=nh;b.deck=nd;if(b.over)b.over.dwell=0;b.over=null;b.dip=b.dv=0;sfx('fall');
+      if(mode==='play'&&!pads.length&&stranded()){mode='lost';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
+    for(const r of rects){
+      if(r.deck?b.h>=r.deck.top-.01:r.h!==b.h)continue;
+      if(r.gate&&r.gate.open>.5)continue;
+      const qx=clamp(b.x,r.x0,r.x1),qz=clamp(b.z,r.z0,r.z1);let dx=b.x-qx,dz=b.z-qz,d2=dx*dx+dz*dz;
+      if(d2>=b.r*b.r)continue;
+      if(d2<1e-9){const l=b.x-r.x0,rr=r.x1-b.x,t=b.z-r.z0,bb=r.z1-b.z,m=Math.min(l,rr,t,bb);
+        if(m===l){b.x=r.x0-b.r;b.vx=-Math.abs(b.vx)*e}else if(m===rr){b.x=r.x1+b.r;b.vx=Math.abs(b.vx)*e}else if(m===t){b.z=r.z0-b.r;b.vz=-Math.abs(b.vz)*e}else{b.z=r.z1+b.r;b.vz=Math.abs(b.vz)*e}
+        continue}
+      const d=Math.sqrt(d2),nx=dx/d,nz=dz/d,vn=(b.vx-(r.vx||0))*nx+(b.vz-(r.vz||0))*nz;
+      b.x=qx+nx*b.r;b.z=qz+nz*b.r;if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz}
+    }
+  }
+  for(let i=0;i<balls.length;i++){const a=balls[i];if(a.hole||a.fallY>.2)continue;
+    for(let j=i+1;j<balls.length;j++){const b=balls[j];if(b.hole||b.h!==a.h||b.fallY>.2)continue;
+      const dx=b.x-a.x,dz=b.z-a.z,d2=dx*dx+dz*dz,rr=a.r+b.r;if(d2>=rr*rr||d2<1e-9)continue;
+      const d=Math.sqrt(d2),nx=dx/d,nz=dz/d,o=rr-d,ia=1/a.m,ib=1/b.m,it=ia+ib;
+      a.x-=nx*o*ia/it;a.z-=nz*o*ia/it;b.x+=nx*o*ib/it;b.z+=nz*o*ib/it;
+      const rv=(b.vx-a.vx)*nx+(b.vz-a.vz)*nz;if(rv<0){hit(-rv*.7,b);const J=-1.6*rv/it;a.vx-=J*ia*nx;a.vz-=J*ia*nz;b.vx+=J*ib*nx;b.vz+=J*ib*nz}}}
+  for(const b of balls){if(b.hole||b.fallY>.05)continue;
+    if(b.pad){if(Math.hypot(b.x-b.pad.x,b.z-b.pad.z)>PR+b.r*.5)b.pad=null;continue}
+    for(const p of pads){if(p.h!==b.h||Math.hypot(b.x-p.x,b.z-p.z)>PR-.04)continue;const q=p.twin;
+      board.localToWorld(wp.set(p.x,p.h+.2,p.z));burst(wp,p.tint,16,2.6,1.6);
+      b.x+=q.x-p.x;b.z+=q.z-p.z;b.px=b.x;b.pz=b.z;b.h=q.h;b.deck=q.deck;b.pad=q;if(b.over)b.over.dwell=0;b.over=null;b.dv=0;b.warp=1;p.flash=q.flash=1;
+      board.localToWorld(wp.set(q.x,q.h+.2,q.z));burst(wp,p.tint,22,3.4,1.8);ripple(q.x,q.h,q.z,1.6,p.tint);sfx('whoosh');buzz('drop');break}
+  }
+  if(wild)for(const b of balls){if(b.hole||b.fallY>.05)continue; // boss boards: every open well has a raised lip that nudges marbles away
+    for(const h of holes){if(h.ball||h.h!==b.h)continue;const dx=b.x-h.x,dz=b.z-h.z,d=Math.hypot(dx,dz);
+      if(d>h.R*.75&&d<h.R+.55){const f=2.6*wild*(1-(d-h.R*.75)/(h.R*.25+.55))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}}}
+  // a marble rolls straight over a well and only settles in when it comes to rest on one it fits
+  for(const b of balls){if(b.hole)continue;let on=null;
+    if(b.cool>0)b.cool-=dt;
+    else if(b.fallY<.05)for(const h of holes){if(h.h!==b.h||h.ball||h.s<b.s)continue; // a marble fits its own well, or any bigger one
+      if(Math.hypot(h.x-b.x,h.z-b.z)<(h.s===b.s?b.r*SEAT_D:h.R-b.r*.6)&&Math.hypot(b.vx,b.vz)<SEAT_V){on=h;break}}
+    const seatT=SEAT_T*(1+1.2*wild);if(on){b.over=on;b.dv+=dt;on.dwell=b.dv/seatT;if(b.dv>=seatT)capture(b,on)}
+    else{if(b.over)b.over.dwell=0;b.over=null;b.dv=0}
+  }
+}
+let lastHit=0,clock=0;
+function hit(v,b){if(v>5&&b&&mode==='play'){board.localToWorld(wp.set(b.x,b.h+b.r,b.z));burst(wp,TINT[b.s],Math.min(14,v|0),v*.35,1)}if(v<1.2)return;const n=performance.now();if(n-lastHit<50)return;lastHit=n;sfx('knock',Math.min(1,v/7));if(v>3.2)buzz('tick')}
+
+// ---------- drawing ----------
+const axis=new THREE.Vector3(), dq=new THREE.Quaternion(), ctr=new THREE.Vector3();
+let intro=1,outro=0,celebrate=0,camKick=0,after=null,camX=0,camZ=0;
+function draw(dt,alpha){
+  let y=0,sc=1,yaw=0,zoom=1;
+  if(mode==='intro'){intro=Math.min(1,intro+dt/1.05);const e=easeBack(intro),o=easeOut(intro);y=(1-e)*-7;sc=lerp(.2,1,e);yaw=(1-o)*-2.4;zoom=1+(1-o)*.3;if(intro>=1){mode='play'}}
+  if(mode==='outro'){outro=Math.min(1,outro+dt/.6);const e=outro*outro*outro;y=e*9+Math.sin(outro*Math.PI)*-.5;sc=1-e*.85;yaw=e*2.6;zoom=1+e*.15;if(outro>=1&&after){const f=after;after=null;f()}}
+  if(celebrate>0){celebrate=Math.max(0,celebrate-dt);const t=1.6-celebrate;y+=Math.sin(Math.min(1,t/.5)*Math.PI)*.55;{const u=Math.min(1,t/1.3);yaw+=(u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2)*6.2832}flash.intensity=Math.max(0,3.2*(1-t/.7))}else flash.intensity=0;
+  rig.position.y=y;rig.scale.setScalar(sc);rig.rotation.y=yaw;rig.visible=mode!=='home';
+  board.rotation.x=tilt.y*MAXT;board.rotation.z=-tilt.x*MAXT;
+  const now=performance.now();
+  for(const b of balls){
+    const x=lerp(b.px,b.x,alpha),z=lerp(b.pz,b.z,alpha);
+    const mx=x-b.mesh.position.x,mz=z-b.mesh.position.z,d=Math.hypot(mx,mz);
+    if(b.warp){b.warp=0;b.mesh.position.set(x,0,z)}else if(d>1e-5&&d<1){axis.set(mz/d,0,-mx/d);dq.setFromAxisAngle(axis,d/b.r);b.q.premultiply(dq)}
+    let yy=b.h+b.r+b.fallY-b.dip-b.bowl+Math.sin(Math.min(1,b.hop/.16)*Math.PI)*.1;
+    if(b.drop>0){b.drop-=dt;const t=clamp(1-b.drop/.45,0,1);yy+=(1-t)*(1-t)*7;b.mesh.visible=b.drop<.45}
+    if(b.hole){yy=lerp(b.h+b.r,b.wrong?b.h-WELL+b.r+.01:b.h-b.r*.42,easeBack(b.sink));b.mat.emissiveIntensity=b.wrong?0:.07*b.sink+.03*Math.sin(now/420+b.x)}else b.mat.emissiveIntensity=0;
+    b.mesh.position.set(x,yy,z);b.mesh.quaternion.copy(b.q);
+  }
+  for(const h of holes){h.lit=lerp(h.lit,h.ball?1:Math.min(.7,h.dwell||0),Math.min(1,dt*8));h.ring.material.opacity=h.ball&&h.ball.wrong?.8+.2*Math.sin(now/130):.38+.62*h.lit+(h.ball?0:.12*Math.sin(now/500+h.x*2));h.glow.material.opacity=.1+.25*h.lit}
+  for(const g of gates)g.mesh.position.y=WALLH/2-g.open*(WALLH+.03);
+  for(const m of movers)m.mesh.position.set(m.cx,WALLH*.575,m.cz);
+  for(const p of plates)p.disc.material.opacity=p.on||p.g.latched?.95:.3+.12*Math.sin(now/300+p.x);
+  for(const p of pads){p.flash=Math.max(0,p.flash-dt*2.5);const w=.5+.5*Math.sin(now/260+p.x);p.ring.material.opacity=.42+.12*w;p.disc.material.opacity=.06+.04*w+.5*p.flash;p.beam.material.opacity=.018+.012*w+.3*p.flash;p.beam.scale.y=.55+p.flash*1.6;p.disc.rotation.y+=dt}
+  for(const r of ripples){if(r.t>=1){r.mesh.visible=false;continue}r.t=Math.min(1,r.t+dt/.7);const e=easeOut(r.t);r.mesh.scale.setScalar(.4+e*r.size);r.mesh.material.opacity=(1-r.t)*.9}
+  stepSparks(dt);motes.rotation.y+=dt*.012;motes.position.y=Math.sin(now/9000)*1.2;
+  camKick=lerp(camKick,mode==='won'?1:0,Math.min(1,dt*2.5));
+  const el=.8,dist=fit*(1-.07*camKick)*zoom;
+  camX=lerp(camX,tilt.x*.55,Math.min(1,dt*5));camZ=lerp(camZ,tilt.y*.4,Math.min(1,dt*5)); // the camera leans a little with the tilt
+  const lift=dist*.085;camera.position.set(camX,Math.sin(el)*dist,Math.cos(el)*dist+lift+camZ);ctr.set(camX*.25,.1,lift);camera.lookAt(ctr);
+  renderer.render(scene,camera);
+}
+function updateHUD(pop){const c=$('#count');c.textContent=placed+'/'+balls.length;if(pop){c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop')}}
+
+// ---------- input: hold and drag to tilt; let go and the board springs level ----------
+const REACH=85;let drag=null;const keys={};
+canvas.addEventListener('pointerdown',e=>{if(mode!=='play'||drag)return;
+  const w=pick(e.clientX,e.clientY);if(w){pop(w);return}
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY};try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+  if(!started){started=true;$('#hint').style.opacity=0}});
+canvas.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id||mode!=='play')return;
+  let x=(e.clientX-drag.x)/REACH,y=(e.clientY-drag.y)/REACH;const m=Math.hypot(x,y);
+  if(m>1){x/=m;y/=m;drag.x=e.clientX-x*REACH;drag.y=e.clientY-y*REACH} // the anchor follows a long drag, so reversing is immediate
+  target.x=x;target.y=y});
+const endDrag=e=>{if(drag&&e.pointerId===drag.id){drag=null;target.x=target.y=0}};
+canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.key==='Escape'&&mode==='play')pause()});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=0});
+function readKeys(){
+  if(mode!=='play'||drag)return;
+  let x=(keys.arrowright||keys.d?1:0)-(keys.arrowleft||keys.a?1:0),y=(keys.arrowdown||keys.s?1:0)-(keys.arrowup||keys.w?1:0);
+  if(x||y){started=true;const m=Math.hypot(x,y);x/=m;y/=m}target.x=x;target.y=y;
+}
+
+// ---------- flow ----------
+const cls=(id,off)=>$(id).classList.toggle('off',off);
+const STAR='<svg viewBox="0 0 24 24"><path d="M12 2.2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.4 5.9 20.8l1.4-6.8L2.2 9.3l6.9-.8z"/></svg>';
+const LOCK='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const CARDS=['#win','#pause','#lost','#forkc','#upd'];
+const hideCards=()=>{CARDS.forEach(c=>cls(c,true));cls('#shade',true)};
+function begin(i){
+  tries[i]=(tries[i]||0)+1;load(i);track('level_start',{level:LEVELS[i].label,stage:LEVELS[i].stage+1,name:LEVELS[i].name});mode='intro';intro=0;outro=0;celebrate=0;drag=null;
+  cls('#home',true);hideCards();cls('#hud',false);cls('#foot',false);
+  const h=$('#hint');h.textContent=L.tip||'';h.style.opacity=1;sfx('whoosh');
+  const sp=$('#splash');sp.children[0].textContent=L.daily?'Today':(L.boss?'Boss · ':L.f?'Hard · ':'Level ')+L.label;sp.children[1].textContent=L.name;sp.classList.remove('go');void sp.offsetWidth;sp.classList.add('go');
+}
+function leave(then){hideCards();cls('#hud',true);cls('#foot',true);if(mode==='home'){then();return}mode='outro';outro=0;after=then;sfx('whoosh')}
+function pause(){if(mode!=='play')return;mode='paused';drag=null;target.x=target.y=0;$('#ptext').textContent='Level '+L.label+' · '+L.name;cls('#shade',false);cls('#pause',false)}
+function resume(){hideCards();mode='play'}
+function win(){
+  mode='won';celebrate=1.6;target.x=target.y=0;drag=null;
+  const t=Math.round(time*10)/10,prev=L.daily?null:save.best[cur],best=!L.daily&&(prev==null||t<prev);if(best){save.best[cur]=t;persist()}
+  if(L.daily&&save.dailyDay!==L.daily){save.streak=save.dailyDay===yesterday()?(save.streak||0)+1:1;save.dailyDay=L.daily;persist();track('daily_complete',{streak:save.streak})}
+  sfx('win');buzz('win');const r=run;track('level_complete',{level:L.label,stage:L.stage+1,seconds:t,highest:nextStage()+1});
+  holes.forEach((h,k)=>setTimeout(()=>{if(run!==r)return;board.localToWorld(wp.set(h.x,h.h+.2,h.z));burst(wp,TINT[h.s],30,5.5,1.8);ripple(h.x,h.h,h.z,2.6,TINT[h.s])},90*k));
+  setTimeout(()=>{if(run===r){wp.set(0,.5,0);burst(wp,'#ffffff',90,8,1.4)}},90*holes.length+80);
+  cls('#hud',true);cls('#foot',true);
+  const n=0;
+  setTimeout(()=>{if(run!==r||mode!=='won')return;
+    $('#wname').textContent='Level '+L.label+' · '+L.name;$('#wtime').textContent=t.toFixed(1)+'s';
+    $('#wbest').textContent=best&&prev!=null?'New best — was '+prev.toFixed(1)+'s':n<3?'Three stars under '+L.par[0]+'s':prev!=null&&!best?'Best '+prev.toFixed(1)+'s':'A perfect run';
+    const ns=L.daily?null:STAGES[L.stage+1];$('#wNext').textContent=!ns?'Level map':ns.length>1?'Choose next':LEVELS[ns[0]].boss?'Face the boss':'Next level';
+    $('#win h3').textContent=L.daily?'Daily board cleared · streak '+save.streak:L.boss?'Boss beaten':'All marbles home';
+    const s=$('#stars');s.innerHTML=STAR.repeat(3);[...s.children].forEach((el,k)=>{if(k<n)el.classList.add('gold');setTimeout(()=>{el.classList.add('in');if(k<n&&run===r){sfx('star');buzz('tick')}},350+k*230)});
+    cls('#win',false)},1250);
+}
+const UPDATE_AT=10; // stages before the end at which players are told new levels come by updating
+function updatePrompt(then){track('update_prompt',{stage:L?L.stage+1:0});save.upd=1;persist();cls('#win',true);cls('#shade',false);cls('#upd',false);
+  $('#uGo').onclick=()=>{sfx('tap');track('update_click',{});try{window.webkit.messageHandlers.mh.postMessage('update')}catch(e){}try{window.MarbleHushAndroid.update()}catch(e){}};
+  $('#uLater').onclick=()=>{sfx('tap');cls('#upd',true);cls('#shade',true);then()}}
+function openStage(k,asked){const s=STAGES[k];
+  if(!asked&&k>=STAGES.length-UPDATE_AT&&(!save.upd||!s)){updatePrompt(()=>openStage(k,true));return}
+  if(!s){leave(goHome);return}if(s.length===1){leave(()=>begin(s[0]));return}
+  // a fork: offer both hard boards
+  $('#choose').innerHTML='';s.forEach(i=>{const b=document.createElement('button'),st=starsFor(i,save.best[i]);
+    b.innerHTML='<em>HARD</em><b>'+LEVELS[i].name+'</b><span>'+LEVELS[i].tag+(st?' · done':'')+'</span>';b.onclick=()=>{sfx('tap');buzz('tick');leave(()=>begin(i))};$('#choose').appendChild(b)});
+  cls('#win',true);cls('#shade',false);cls('#forkc',false);
+}
+function renderHome(){
+  const cleared=STAGES.filter((_,k)=>stageDone(k)).length;$('#total').innerHTML='<b>✓</b> '+cleared+' of '+STAGES.length+' cleared';
+  const nk=nextStage(),map=$('#map');map.innerHTML='';let curEl=null;
+  const stars=n=>n?'<small>✓ done</small>':'';
+  CHAPTERS.forEach((w,wi)=>{
+    const ids=LEVELS.map((l,i)=>l.w===wi?i:-1).filter(i=>i>=0),open=unlocked(ids[0]),fi=ids.findIndex(i=>LEVELS[i].f);
+    const sec=document.createElement('section');sec.className='world'+(open?'':' shut');sec.style.cssText='--c1:'+w.card[0]+';--c2:'+w.card[1]+';animation-delay:'+Math.min(wi,6)*70+'ms';
+    sec.innerHTML='<h2>'+w.name+'<small>Stages '+(LEVELS[ids[0]].stage+1)+'–'+(LEVELS[ids[ids.length-1]].stage+1)+'</small></h2><div class="steps"></div><div class="forkhead">Then pick one</div><div class="fork"></div><div class="steps"></div>';
+    const mk=(i,fork)=>{const b=document.createElement('button'),Lv=LEVELS[i],op=unlocked(i),isCur=Lv.stage===nk&&!stageDone(nk);
+      b.id='lv'+i;b.className=(fork?'pick':'node')+(Lv.boss?' boss':'')+(op?'':' lock')+(isCur?' cur':'');
+      b.setAttribute('aria-label',(Lv.boss?'Boss level ':'Level ')+Lv.label+' '+Lv.name+(op?'':' (locked)'));
+      b.innerHTML=fork?(op?'<b>'+Lv.name+'</b><span>'+Lv.tag+'</span>'+stars(starsFor(i,save.best[i])):LOCK+'<span>Hard board</span>')
+        :(op?Lv.label+(save.best[i]!=null?'<small>✓ done</small>':Lv.boss?'<small>BOSS</small>':''):LOCK);
+      if(op)b.onclick=()=>{sfx('tap');buzz('tick');begin(i)};if(isCur&&!curEl)curEl=sec;return b};
+    ids.forEach((i,k)=>{if(!LEVELS[i].f)sec.children[k<fi?1:4].appendChild(mk(i))});
+    const fk=ids.filter(i=>LEVELS[i].f);sec.children[3].appendChild(mk(fk[0],1));const or=document.createElement('i');or.textContent='or';sec.children[3].appendChild(or);sec.children[3].appendChild(mk(fk[1],1));
+    map.appendChild(sec)});
+  const dd=save.dailyDay===today(),st=save.dailyDay>=yesterday()?save.streak||0:0;
+  $('#bDaily').innerHTML=(dd?'✓ Daily board done':'☀ Play today’s board')+(st?' · <b>'+st+'-day streak</b>':'');
+  const s=STAGES[nk];$('#bPlay').textContent=save.best[0]==null?'Play':stageDone(nk)?'Play again':s.length>1?'Choose your challenge':'Play level '+LEVELS[s[0]].label;
+  if(curEl)requestAnimationFrame(()=>{$('#map').scrollTop=curEl.offsetTop-$('#map').offsetTop-12});
+}
+function goHome(){mode='home';renderHome();cls('#home',false);cls('#hud',true);cls('#foot',true);hideCards();setSky(LEVELS[STAGES[nextStage()][0]].pal)}
+$('#bDaily').onclick=()=>{sfx('tap');buzz('tick');begin(DAILY)};
+$('#bPlay').onclick=()=>{sfx('tap');buzz('tick');const k=nextStage(),s=STAGES[k];if(s.length>1&&!stageDone(k)){openStage(k)}else begin(s[0])};
+$('#shade').onclick=()=>{if(!$('#forkc').classList.contains('off')){cls('#forkc',true);cls('#shade',true);if(mode==='won')cls('#win',false)}};
+$('#bPause').onclick=()=>{sfx('tap');pause()};
+$('#bRestart').onclick=()=>{if(mode==='play'){sfx('tap');leave(()=>begin(cur))}};
+$('#bResume').onclick=()=>{sfx('tap');resume()};
+$('#bRetry').onclick=$('#lAgain').onclick=$('#wAgain').onclick=()=>{sfx('tap');leave(()=>begin(cur))};
+$('#bMap').onclick=$('#lMap').onclick=$('#wMap').onclick=()=>{sfx('tap');leave(goHome)};
+$('#wNext').onclick=()=>{sfx('tap');buzz('tick');if(L.daily)leave(goHome);else openStage(L.stage+1)};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='play')pause()});
+
+// ---------- loop ----------
+let last=performance.now(),acc=0,quality=0,slow=0,fast=0,qT=0;
+const DPR=window.devicePixelRatio||1, QUAL=[[Math.min(DPR,2),2048,true],[Math.min(DPR,1.5),1024,true],[Math.min(DPR,1.15),1024,true],[Math.min(DPR,1),0,false]];
+function setQuality(q){quality=clamp(q,0,QUAL.length-1);const [pr,sm,blur]=QUAL[quality];
+  renderer.setPixelRatio(pr);if(vw)renderer.setSize(vw,vh,false);
+  sun.castShadow=sm>0;if(sm&&sun.shadow.mapSize.x!==sm){sun.shadow.mapSize.set(sm,sm);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}}
+  document.body.classList.toggle('lite',!blur||quality>=2);try{localStorage.setItem('mh-quality',quality)}catch(e){}}
+function watchFrames(ms){ // judged only while a level is being played
+  if(mode!=='play'||ms>250)return;qT+=ms;if(ms>24)slow++;else fast++;
+  if(qT<1500)return;if(slow>fast*.6&&quality<QUAL.length-1)setQuality(quality+1);qT=slow=fast=0}
+try{const q=+localStorage.getItem('mh-quality');if(q>0)setQuality(q)}catch(e){}
+function frame(now){
+  requestAnimationFrame(frame);watchFrames(now-last);
+  if(canvas.clientWidth!==vw||canvas.clientHeight!==vh)resize();
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  readKeys();
+  acc+=dt;let n=0;while(acc>=H&&n<24){step(H);acc-=H;n++}if(n===24)acc=0;
+  if(mode==='play'||mode==='won'){$('#dial').firstElementChild.style.transform='translate('+tilt.x*15+'px,'+tilt.y*15+'px)'}
+  if(L)draw(dt,acc/H);
+}
+window.__mh={
+  nativeTilt(){}, // phone-tilt control is switched off
+  shot(i,secs){begin(i);intro=1;mode='play';balls.forEach(b=>b.drop=0);$('#splash').classList.remove('go');$('#hint').style.opacity=0;started=true;const t=[.5,.35];target.x=t[0];target.y=t[1];for(let k=0;k<(secs||1)*240;k++)step(H);tilt.x=t[0]*.5;tilt.y=t[1]*.5}, // store screenshots: jump to a board mid-play
+  back(){ // returns true when the page handled the back press
+    if(mode==='play'){pause();return true}
+    if(mode==='paused'){resume();return true}
+    if(mode==='won'||mode==='lost'){leave(goHome);return true}
+    return false},
+  begin(i){begin(i);intro=1;mode='play';balls.forEach(b=>b.drop=0)},
+  sim(tx,ty,secs){started=true;target.x=tx;target.y=ty;for(let i=0;i<secs*240&&mode==='play';i++)step(H);return placed},
+  get state(){return{mode,cur,time,placed,total:balls.length,balls:balls.map(b=>[+b.x.toFixed(2),+b.z.toFixed(2),b.h,!!b.hole])}},
+  levels:LEVELS,stages:STAGES
+};
+resize();load(0);goHome();requestAnimationFrame(frame);
+})();
+</script>
