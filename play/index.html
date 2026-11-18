@@ -205,6 +205,7 @@ const PR=.36, WELL=.26, G=36, MAXT=.3, WT=.14, WALLH=.28, H=1/240;
 const MAGR=2.3; // reach of a hidden magnet
 // Pockets work like a pool table: a ball rolling slowly near its own well is drawn in and drops; a fast one skips over.
 const PULL_R=.55, PULL_V=2.6, PULL=14, CAP_V=3.4;
+const KA=[1.24,1,.84,.7]; // how readily each size answers a tilt: the heavier the ball, the slower it gets going
 const POLE_R=2.8, POLE_F=4.2; // reach and strength of the two pole balls (one pulls every ball, one pushes)
 const SEAT_D=.6, SEAT_V=1.3, SEAT_T=.14; // how centred, how slow, and for how long a marble must sit over a well to settle   // how fast a marble sinks while it is over an open well: fast marbles cross before they sink
 
@@ -323,7 +324,7 @@ function buildMaze(L){
 // Never change genLevel or the chapter loop in a way that alters levels already released: __mh.print(n) returns a
 // fingerprint of the first n levels, and FROZEN below is the released value to compare against before shipping.
 const TOTAL_STAGES=300;
-const FROZEN=[300,'5b933493'];
+const FROZEN=[300,'1e668b03'];
 const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
 const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
 const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
@@ -439,7 +440,7 @@ const MOD_TIP={bump:'Spring bumpers kick a ball away. Use them to bank a shot, o
 const MOD_TAG={bump:'Spring bumpers',belt:'Conveyor belts',split:'Ball splitter',hot:'Explosive walls',poles:'Pole balls',slip:'Slick table',open:'No rails'};
 function addMod(L,m,rnd,diff){
   if(m==='slip'){if(L.slip)return false;L.slip=1;return true}
-  if(m==='open'&&L.decks&&L.decks.length){if(L.open||L.balls.length>6||(L.portals&&L.portals.length))return false;L.open=1;return true} // floors with no rails
+  if(m==='open'&&L.decks&&L.decks.length){if(L.open||L.balls.length>4||(L.portals&&L.portals.length))return false;L.open=1;return true} // floors with no rails
   if(L.maze||L[m]||(L.decks&&L.decks.length)||(L.portals&&L.portals.length)||(L.gates&&L.gates.length)||(L.movers&&L.movers.length))return false;
   const W=L.W,D=L.D,E=L.shape?edgesOf(SHAPES[L.shape](W,D)):null,reg=[-W/2,W/2,-D/2,D/2];L.walls=L.walls||[];
   const solid=()=>[...L.walls,...(L.hot||[]),...(L.bump||[]).concat(L.split||[]).map(b=>[b[0],b[1],b[2]*2,b[2]*2])];
@@ -448,7 +449,7 @@ function addMod(L,m,rnd,diff){
   const corners=(w,mg)=>!E||[[-1,-1],[1,-1],[1,1],[-1,1]].every(c=>inPoly(E,w[0]+c[0]*w[2]/2,w[1]+c[1]*w[3]/2,mg));
   if(m==='open'){if(L.walls.length>4||L.balls.length>7||L.split)return false; // balls that start too near the edge leave, with their wells
     const near=b=>E?!inPoly(E,b[0],b[1],.8):Math.abs(b[0])>W/2-.8||Math.abs(b[1])>D/2-.8,keepers=L.balls.map((b,i)=>i).filter(i=>!near(L.balls[i]));
-    if(keepers.length<3)return false;L.balls=keepers.map(i=>L.balls[i]);L.holes=keepers.map(i=>L.holes[i]);L.open=1;return true}
+    if(keepers.length<2)return false;L.balls=keepers.map(i=>L.balls[i]);L.holes=keepers.map(i=>L.holes[i]);L.open=1;return true}
   if(m==='poles'){const q=scatter(rnd,[.25,.25],reg,taken(.5),.3);if(!q)return false;L.poles=[[q[0][0],q[0][1],1],[q[1][0],q[1][1],-1]];return true}
   if(m==='bump'){const k=2+Math.min(2,diff/5|0),q=scatter(rnd,Array(k).fill(.3),reg,taken(.45),.35);if(!q)return false;L.bump=q.map(v=>[v[0],v[1],.3]);if(ok())return true;delete L.bump;return false}
   if(m==='split'){const k=diff>8?2:1;if(L.balls.length+k>9)return false; // every ball becomes one size, so a twin always has a well that fits
@@ -490,7 +491,7 @@ for(let c=0;c*CH<TOTAL_STAGES;c++){
     (L.mods||[]).forEach(m=>{if(!seenM[m]){seenM[m]=1;L.tip=MOD_TIP[m]}});
     if(!seenT[t]){seenT[t]=1;if(!L.tip&&FIRST_TIP[t])L.tip=FIRST_TIP[t]}LEVELS.push(L)};
   const make=(t,k,hard,boss,want)=>{const ease=k===0||k===5||k===9?1:0,diff=Math.max(1,1+Math.min(c,20)*.5+k*.2-ease+(hard?3:0)+(boss?5:0))|0;let L=null;
-    for(let a=0;a<40&&!L;a++){const seed=1000+c*97+k*13+a*7919;L=genLevel(t,diff,seed,hard||boss,want.includes('open')||want.includes('hot')?(hard||boss?5:4):want.includes('split')?6:0);
+    for(let a=0;a<40&&!L;a++){const seed=1000+c*97+k*13+a*7919;L=genLevel(t,diff,seed,hard||boss,want.includes('open')?(hard||boss?4:3):want.includes('hot')?(hard||boss?5:4):want.includes('split')?6:0);
       if(L&&want.length){const mr=rng(seed+5);for(const m of want)if(addMod(L,m,mr,diff))(L.mods=L.mods||[]).push(m);if(!L.mods&&a<30)L=null}} // keep looking until a wanted piece fits
     return L||genLevel(0,1,5000+c*7+k,false)};
   const wants=(t,n)=>{const out=[],pool=MODOK(t)?mods:rnd()<.5?mods.filter(m=>m==='slip'):[];for(let g=0;g<8&&out.length<Math.min(n,pool.length);g++){const m=pool[rnd()*pool.length|0],clash=(m==='hot'&&(out.includes('slip')||out.includes('split')))||((m==='slip'||m==='split')&&out.includes('hot'));if(!out.includes(m)&&!clash)out.push(m)}return out};
@@ -633,7 +634,8 @@ const inRect=(d,x,z)=>x>d.x0&&x<d.x1&&z>d.z0&&z<d.z1;
 const deckAt=(x,z,below=1e9)=>{let best=null;for(const d of decks)if(d.top<below-.01&&inRect(d,x,z)&&(!best||d.top>best.top))best=d;return best};
 function load(i){
   clearBoard();cur=i;L=LEVELS[i];WD=WORLDS[L.pal];run++;
-  wild=L.boss?Math.max(.2,.6-((tries[i]||1)-1)*.2):0; // a boss plays wild, and calms down a little with each retry
+  wild=L.boss?Math.max(.2,.6-((tries[i]||1)-1)*.2):0;
+  ease=bot?0:clamp(((tries[i]||1)-2)*.2,0,.8); // from the third try the pockets reach further and the hidden magnets weaken // a boss plays wild, and calms down a little with each retry
   const {W,D}=L, RIM=.12;
   document.documentElement.style.setProperty('--accent',WD.accent);
   L.decks.forEach(([x,z,w,d,h])=>decks.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,top:h,x,z,w,d}));
@@ -712,11 +714,11 @@ function load(i){
     if(pole){const halo=new THREE.Mesh(haloGeo,keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.16,blending:THREE.AdditiveBlending,depthWrite:false})));halo.scale.setScalar(SZ[s]*1.7);mesh.add(halo)}
     const dk=deckAt(x,z),b={x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,pole:pole||0,off:0,offY:0,offV:0,mag:[],h:dk?dk.top:0,deck:dk,ka,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:0,mesh,mat:m,q:new THREE.Quaternion()};
     balls.push(b);return b};
-  L.balls.forEach(([x,z,s,t],k)=>{addBall(x,z,s,t,nb>1&&!L.open?.68+.64*order[k]/(nb-1):1,0).drop=.55+k*.07});
+  L.balls.forEach(([x,z,s,t],k)=>{addBall(x,z,s,t,KA[s]*(nb>1?.88+.24*order[k]/(nb-1):1),0).drop=.55+k*.07});
   L.poles.forEach(([x,z,sg],k)=>{addBall(x,z,1,null,1,sg).drop=.6+(nb+k)*.07});
   // Hidden magnets: every ball is pushed away from two unseen spots of its own, so no two balls answer a tilt the
   // same way and each has to be steered on its own. A magnet never sits near the ball's start or a well it fits.
-  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.theme===10||L.theme===11?.3:L.walls.length>10?.5:1)*(L.open?0:L.hot.length?.5:1)*(nb>9?.5:1)*(L.slip?.6:1);
+  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.theme===10||L.theme===11?.3:L.walls.length>10?.5:1)*(L.open?0:L.hot.length?.5:1)*(nb>9?.5:1)*(L.slip?.6:1)*(1-.6*ease);
   balls.forEach(b=>{b.mag=[];for(let t=0;MS&&!b.pole&&t<80&&b.mag.length<2;t++){const x=(rnd()-.5)*(W-1),z=(rnd()-.5)*(D-1);
     if(L.edges&&!inPoly(L.edges,x,z,.4))continue;
     if(Math.hypot(x-b.x,z-b.z)<1.4||holes.some(h=>h.s===b.s&&Math.hypot(x-h.x,z-h.z)<1.9)||b.mag.some(m=>Math.hypot(x-m[0],z-m[1])<1.5))continue;
@@ -749,7 +751,7 @@ function capture(b,h){
   sfx('drop');buzz('drop');
   if(placed===L.need)win();
 }
-let combo=0,lastCap=-9;
+let combo=0,lastCap=-9,ease=0;
 function toast(s,c){const t=$('#toast');t.textContent=s;t.style.color=c||'#fff';t.classList.remove('go');void t.offsetWidth;t.classList.add('go')}
 function fail(msg){ // the level starts over on its own
   if(mode!=='play')return;mode='lost';target.x=target.y=0;drag=null;track('level_fail',{level:L.label,stage:L.stage+1});buzz('drop');
@@ -798,7 +800,7 @@ function step(dt){
     let mx=0,mz=0;for(const m of b.mag){const dx=b.x-m[0],dz=b.z-m[1],d=Math.hypot(dx,dz);if(d<MAGR&&d>.01){const f=m[2]*(1-d/MAGR)*(1-d/MAGR)/d;mx+=dx*f;mz+=dz*f}}
     if(!b.pole)for(const q of balls){if(!q.pole||q.off||q.h!==b.h)continue;const dx=q.x-b.x,dz=q.z-b.z,d=Math.hypot(dx,dz);if(d<POLE_R&&d>.01){const f=POLE_F*q.pole*(1-d/POLE_R)*(1-d/POLE_R)/d;mx+=dx*f;mz+=dz*f}}
     if(b.h===0&&b.fallY<.05)for(const t of belts)if(inRect(t,b.x,b.z)){const u=2.2*(t.sp-(b.vx*t.dx+b.vz*t.dz));mx+=t.dx*u;mz+=t.dz*u}
-    {const w=L.open?0:.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w+mz)*dt)*damp}
+    {const w=L.open?0:.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph),g=b.ka*(1-.32*clamp((b.x*tilt.x+b.z*tilt.y)/Math.max(hwB,hdB),-1,1));b.vx=(b.vx+(ax*g-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*g+ax*w+mz)*dt)*damp}
     {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild)*(L.slip?.15:1)/zip)*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
     if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax+mx,az+mz)<(b.stone?.9:.35)){b.vx=b.vz=0}
     b.x+=b.vx*dt;b.z+=b.vz*dt;
@@ -845,8 +847,8 @@ function step(dt){
     if(b.cool>0)b.cool-=dt;
     else if(b.fallY<.05){const sp=Math.hypot(b.vx,b.vz);
       for(const h of holes){if(h.h!==b.h||h.ball||h.s<b.s)continue;const dx=h.x-b.x,dz=h.z-b.z,d=Math.hypot(dx,dz);
-        if(h.s===b.s){if(d<h.R+PULL_R&&d>.02&&sp<PULL_V){const f=PULL*(1-d/(h.R+PULL_R))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}
-          if(d<h.R*.8){if(sp<CAP_V){on=h;break}if(!(b.skip>clock)){b.skip=clock+1.2;toast('Too fast!','#ff9d6a');ripple(h.x,h.h,h.z,1.1,'#ff9d6a');buzz('tick')}}}
+        if(h.s===b.s){if(d<h.R+PULL_R*(1+ease)&&d>.02&&sp<PULL_V*(1+.5*ease)){const f=PULL*(1-d/(h.R+PULL_R*(1+ease)))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}
+          if(d<h.R*.8){if(sp<CAP_V*(1+.5*ease)){on=h;break}if(!(b.skip>clock)){b.skip=clock+1.2;toast('Too fast!','#ff9d6a');ripple(h.x,h.h,h.z,1.1,'#ff9d6a');buzz('tick')}}}
         else if(d<h.R-b.r*.6&&sp<SEAT_V){on=h;break}}} // a smaller ball only lodges in a bigger well when it stops there
     const seatT=on&&on.s===b.s?.03:SEAT_T;if(on){b.over=on;b.dv+=dt;on.dwell=b.dv/seatT;if(b.dv>=seatT)capture(b,on)}
     else{if(b.over)b.over.dwell=0;b.over=null;b.dv=0}
