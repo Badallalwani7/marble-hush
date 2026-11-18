@@ -39,6 +39,9 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.35);color:var(--accent)}100%{transform:scale(1)}}
 #foot{position:absolute;left:0;right:0;bottom:0;padding:0 var(--gr) calc(18px + var(--sb)) var(--gl);display:grid;justify-items:center;gap:10px;pointer-events:none;transition:opacity .35s}
 #foot.off{opacity:0}
+#toast{position:fixed;left:0;right:0;top:21%;text-align:center;font:800 26px/1 var(--display);letter-spacing:.02em;text-shadow:0 3px 14px rgba(0,0,0,.55);pointer-events:none;opacity:0;z-index:6}
+#toast.go{animation:toast 1s cubic-bezier(.2,.9,.3,1) both}
+@keyframes toast{0%{opacity:0;transform:translateY(14px) scale(.6)}18%{opacity:1;transform:translateY(0) scale(1.12)}30%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-18px) scale(1)}}
 #hint{font:500 13px/1.35 var(--text);color:var(--dim);text-align:center;max-width:300px;transition:opacity .6s}
 #dial{width:46px;height:46px;border-radius:50%;border:1.5px solid var(--line);position:relative;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%)}
 #dial i{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
@@ -185,6 +188,7 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
   </section>
 </div>
 
+<div id="toast" aria-hidden="true"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (()=>{
@@ -199,6 +203,9 @@ const RW=SZ.map(r=>r*1.05);                    // matching well radii
 const TINT=['#ffd76a','#e6ecff','#ff6f9c','#6fd3ff'];
 const PR=.36, WELL=.26, G=36, MAXT=.3, WT=.14, WALLH=.28, H=1/240;
 const MAGR=2.3; // reach of a hidden magnet
+// Pockets work like a pool table: a ball rolling slowly near its own well is drawn in and drops; a fast one skips over.
+const PULL_R=.55, PULL_V=2.6, PULL=14, CAP_V=3.4;
+const POLE_R=2.8, POLE_F=4.2; // reach and strength of the two pole balls (one pulls every ball, one pushes)
 const SEAT_D=.6, SEAT_V=1.3, SEAT_T=.14; // how centred, how slow, and for how long a marble must sit over a well to settle   // how fast a marble sinks while it is over an open well: fast marbles cross before they sink
 
 // ---------- worlds & levels ----------
@@ -218,7 +225,7 @@ const GW=[[-2.2,0,2,WT],[2.2,0,2,WT]]; // a wall with a doorway in the middle
 const LEDGE=[[0,-2.2,6.4,3.6,.55]];
 // Every world is five levels followed by a fork: two hard boards (f:1), beat either to move on.
 const LEVELS=[
-  {w:0,name:'First Light',W:5,D:6,balls:bs([[0,-2]]),holes:hs([[0,1.3]]),tip:'Drag to tilt; let go and the board levels out. A marble rolls straight over a well. It only drops in when you bring it to rest right on top.'},
+  {w:0,name:'First Light',W:5,D:6,balls:bs([[0,-2]]),holes:hs([[0,1.3]]),tip:'Drag to tilt; let go and the board levels out. Roll a ball gently over its well and it drops in. Too fast and it skips right over.'},
   {w:0,name:'Three Wishes',W:5.4,D:6.4,balls:bs(row(3,-2.5,.8)),holes:hs([[-1.4,.4],[1.4,.4],[0,1.9]]),tip:'Every ball is pushed around by hidden magnets of its own, so they never roll together. Steer one at a time.'},
   {w:0,name:'Compass',W:6,D:7,balls:bs(row(5,-2.9,.72)),holes:hs([[0,0],[-1.5,0],[1.5,0],[0,-1.5],[0,1.5]])},
   {w:0,name:'Orbit',W:6,D:7,balls:bs(ring(6,.62)),holes:hs(ring(6,2.1,.52))},
@@ -232,7 +239,7 @@ const LEVELS=[
   {w:1,name:'Twin Rooms',W:6.6,D:7.6,balls:bs([...row(3,-3.1,.72,-1.8),...row(3,-2.4,.72,-1.8)]),holes:hs([...row(3,2.9,.95,-1.75),[1.7,-2.8],[1.7,-.6],[1.7,1.6]]),walls:[[0,-.7,WT,6.2]]},
   {w:1,name:'Narrow Pass',W:6.4,D:7.6,balls:[...bs([[-2,-3],[-1.2,-3]],0),...bs([[1,-3],[2,-3]],2)],holes:[...hs([[-2.2,2.6],[-.8,2.6]],2),...hs([[0,1.2],[2.3,2.8]],0)],walls:[[-1.72,0,2.96,WT],[1.02,0,1.56,WT]],tip:'Small marbles slip through gaps the big ones cannot.'},
   {w:1,f:1,name:'The Sieve',tag:'6 marbles',W:6.6,D:8,balls:bs(row(6,-3.5,.74)),holes:hs([...row(3,3.3,1.9),...row(3,.55,2.2)]),walls:[...row(3,-1.9,2.2).map(p=>[p[0],p[1],1.2,WT]),...row(2,-.5,2.2).map(p=>[p[0],p[1],1.2,WT]),...row(2,1.9,2.2).map(p=>[p[0],p[1],1.2,WT])]},
-  {w:1,f:1,name:'Stone Yard',tag:'Heavy stones',W:6.4,D:7.6,balls:[...bs(row(3,-3,.9,-1.4),1,'s'),...bs(row(3,-3,.9,1.6),1)],holes:hs([...row(3,2.9,1.5),...row(3,.2,2.2)]),walls:[[-1.6,-1.3,.8,.8],[1.6,-1.3,.8,.8],[0,1.6,.8,.8]]},
+  {w:1,f:1,name:'Stone Yard',tag:'Six marbles',W:6.4,D:7.6,balls:[...bs(row(3,-3,.9,-1.4),1,'s'),...bs(row(3,-3,.9,1.6),1)],holes:hs([...row(3,2.9,1.5),...row(3,.2,2.2)]),walls:[[-1.6,-1.3,.8,.8],[1.6,-1.3,.8,.8],[0,1.6,.8,.8]]},
 
   {w:2,name:'The Ledge',W:6.4,D:8,decks:LEDGE,balls:bs(row(3,-3.2,.9)),holes:hs([[0,-1.3],[-1.5,2.4],[1.5,2.4]]),tip:'A marble that rolls off the ledge cannot climb back. Fill the upper well first.'},
   {w:2,name:'Balcony',W:6.4,D:8,decks:LEDGE,balls:bs(row(4,-3.3,.8)),holes:hs([[-2.5,-1.2],[2.5,-1.2],[-1.6,2.6],[1.6,2.6]]),walls:[[-2.1,-.5,2.2,WT],[2.1,-.5,2.2,WT]]},
@@ -286,7 +293,7 @@ function edgesOf(P){let A=0;P.forEach((p,i)=>{const q=P[(i+1)%P.length];A+=p[0]*
 const inPoly=(E,x,z,m)=>E.every(e=>(x-e[0])*e[2]+(z-e[1])*e[3]>=m);
 const grow=(P,E,d)=>P.map((p,i)=>{const a=E[(i+P.length-1)%P.length],b=E[i],k=d/(1+a[2]*b[2]+a[3]*b[3]);return[p[0]-(a[2]+b[2])*k,p[1]-(a[3]+b[3])*k]});
 function buildMaze(L){
-  const [C,Rw,seed]=L.maze, rnd=rng(seed), id=(c,r)=>r*C+c;
+  const [C,Rw,seed,sc=1]=L.maze, rnd=rng(seed), id=(c,r)=>r*C+c;
   const E=new Uint8Array(C*Rw), S=new Uint8Array(C*Rw), seen=new Uint8Array(C*Rw);
   const st=[[0,0]];seen[0]=1;
   while(st.length){
@@ -297,15 +304,16 @@ function buildMaze(L){
     seen[id(c+a,r+b)]=1;st.push([c+a,r+b]);
   }
   for(let i=0;i<C*Rw;i++){const c=i%C,r=i/C|0; // a few extra doors so the maze has loops
-    if(c<C-1&&!E[i]&&rnd()<.12)E[i]=1;if(r<Rw-1&&!S[i]&&rnd()<.12)S[i]=1}
+    if(c<C-1&&!E[i]&&rnd()<.04)E[i]=1;if(r<Rw-1&&!S[i]&&rnd()<.04)S[i]=1} // almost no shortcuts: a wrong turn means going back
   const walls=[];
-  for(let r=0;r<Rw-1;r++){let s=-1;for(let c=0;c<=C;c++){const w=c<C&&!S[id(c,r)];if(w&&s<0)s=c;if(!w&&s>=0){walls.push([(s+c)/2-C/2,r+1-Rw/2,c-s+WT,WT]);s=-1}}}
-  for(let c=0;c<C-1;c++){let s=-1;for(let r=0;r<=Rw;r++){const w=r<Rw&&!E[id(c,r)];if(w&&s<0)s=r;if(!w&&s>=0){walls.push([c+1-C/2,(s+r)/2-Rw/2,WT,r-s+WT]);s=-1}}}
+  for(let r=0;r<Rw-1;r++){let s=-1;for(let c=0;c<=C;c++){const w=c<C&&!S[id(c,r)];if(w&&s<0)s=c;if(!w&&s>=0){walls.push([((s+c)/2-C/2)*sc,(r+1-Rw/2)*sc,(c-s)*sc+WT,WT]);s=-1}}}
+  for(let c=0;c<C-1;c++){let s=-1;for(let r=0;r<=Rw;r++){const w=r<Rw&&!E[id(c,r)];if(w&&s<0)s=r;if(!w&&s>=0){walls.push([(c+1-C/2)*sc,((s+r)/2-Rw/2)*sc,WT,(r-s)*sc+WT]);s=-1}}}
   const cells=[...Array(C*Rw).keys()];
   for(let i=cells.length-1;i>0;i--){const j=rnd()*(i+1)|0;[cells[i],cells[j]]=[cells[j],cells[i]]}
-  const pt=i=>[i%C-C/2+.5,(i/C|0)-Rw/2+.5];
-  const top=cells.filter(i=>(i/C|0)<Rw*.4), bot=cells.filter(i=>(i/C|0)>=Rw*.5);
-  return {W:C,D:Rw,walls,balls:L.sz.map((s,k)=>[...pt(top[k]),s]),holes:L.sz.map((s,k)=>[...pt(bot[k]),s])};
+  const pt=i=>[+((i%C-C/2+.5)*sc).toFixed(3),+(((i/C|0)-Rw/2+.5)*sc).toFixed(3)];
+  const dead=i=>{const c=i%C,r=i/C|0;return (c<C-1&&E[i]?1:0)+(c>0&&E[i-1]?1:0)+(r<Rw-1&&S[i]?1:0)+(r>0&&S[i-C]?1:0)===1}; // wells hide at dead ends
+  const top=cells.filter(i=>(i/C|0)<Rw*.35), far=cells.filter(i=>(i/C|0)>=Rw*.45), bot=[...far.filter(dead),...far.filter(i=>!dead(i))];
+  return {W:C*sc,D:Rw*sc,walls,balls:L.sz.map((s,k)=>[...pt(top[k]),s]),holes:L.sz.map((s,k)=>[...pt(bot[k]),s])};
 }
 
 // ---------- generated chapters ----------
@@ -314,14 +322,14 @@ function buildMaze(L){
 // version; players see a "more levels coming" stop after the last one. Raise it in an update to open more.
 // Never change genLevel or the chapter loop in a way that alters levels already released: __mh.print(n) returns a
 // fingerprint of the first n levels, and FROZEN below is the released value to compare against before shipping.
-const TOTAL_STAGES=50;
-const FROZEN=[50,'cd923b1a'];
+const TOTAL_STAGES=300;
+const FROZEN=[300,'5b933493'];
 const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
 const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
 const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
-const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Pillar grid','Three floors','Odd table'];
-const PAL_OF=[0,1,2,3,4,5,1,2,6]; // which palette each board type wears
-const FIRST_TIP={8:'A new table shape. The rails are angled, so marbles bank off them.',6:'A lattice of pillars. Thread the marbles through the lanes.',7:'Three floors. Marbles only go down, so fill the top wells first.'};
+const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Block grid','Three floors','Odd table','The swarm','Ring maze','The loop'];
+const PAL_OF=[0,1,2,3,4,5,1,2,6,3,5,4]; // which palette each board type wears
+const FIRST_TIP={8:'A new table shape. The rails are angled, so marbles bank off them.',5:'A maze. The wells hide in dead ends, and a wrong turn means rolling all the way back.',6:'A grid of blocks. Thread the balls down the lanes and round the bricks.',7:'Three floors. Marbles only go down, so fill the top wells first.',9:'A crowd of balls on a big table, and it keeps growing. Do not chase them one by one: sweep them gently and the wells do the rest.',10:'A ring maze. Each ring has one doorway; work inward to the heart.',11:'One corridor, all the way round. Pick the short way.'};
 function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per radius inside reg=[x0,x1,z0,z1], clear of circles and rects in `taken`
   const out=[];
   for(const r of rad){let ok=false;
@@ -331,18 +339,18 @@ function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per ra
     if(!ok)return null}
   return out;
 }
-function connected(W,D,walls,pts,r=.46){ // can a marble of radius r roll between every listed point?
+function connected(W,D,walls,pts,r=.46,E){ // can a marble of radius r roll between every listed point?
   const res=.1,nx=Math.round(W/res),nz=Math.round(D/res),seen=new Uint8Array(nx*nz);
-  const free=(a,b)=>{const x=-W/2+(a+.5)*res,z=-D/2+(b+.5)*res;if(Math.abs(x)>W/2-r||Math.abs(z)>D/2-r)return false;
+  const free=(a,b)=>{const x=-W/2+(a+.5)*res,z=-D/2+(b+.5)*res;if(Math.abs(x)>W/2-r||Math.abs(z)>D/2-r||(E&&!inPoly(E,x,z,r)))return false;
     return walls.every(w=>{const qx=clamp(x,w[0]-w[2]/2,w[0]+w[2]/2),qz=clamp(z,w[1]-w[3]/2,w[1]+w[3]/2);return Math.hypot(x-qx,z-qz)>r})};
   const cell=p=>[clamp(Math.floor((p[0]+W/2)/res),0,nx-1),clamp(Math.floor((p[1]+D/2)/res),0,nz-1)];
   const q=[cell(pts[0])];seen[q[0][1]*nx+q[0][0]]=1;
   for(let i=0;i<q.length;i++){const [a,b]=q[i];for(const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const A=a+da,B=b+db;if(A<0||B<0||A>=nx||B>=nz||seen[B*nx+A]||!free(A,B))continue;seen[B*nx+A]=1;q.push([A,B])}}
   return pts.every(p=>{const [a,b]=cell(p);for(let da=-1;da<=1;da++)for(let db=-1;db<=1;db++){const A=a+da,B=b+db;if(A>=0&&B>=0&&A<nx&&B<nz&&seen[B*nx+A])return true}return false});
 }
-function genLevel(theme,diff,seed,hard){
+function genLevel(theme,diff,seed,hard,cap){
   const rnd=rng(seed),W=6.4,D=8,hw=W/2,hd=D/2,pick=a=>a[rnd()*a.length|0];
-  let n=clamp(3+(diff/3|0)+(hard?2:0),3,9);
+  let n=clamp(3+(diff/2.4|0)+(hard?2:0),3,cap||11);
   const kinds=diff<3?[1]:diff<6?[1,2]:diff<10?[0,1,2]:[0,1,2,3];
   const sizes=k=>Array.from({length:k},()=>pick(kinds)), rw=sz=>sz.map(x=>RW[x]), rb=sz=>sz.map(x=>SZ[x]);
   const mk=(sz,bp,hp,extra)=>Object.assign({W,D,balls:bp.map((p,k)=>[p[0],p[1],sz[k]]),holes:hp.map((p,k)=>[p[0],p[1],sz[k]])},extra);
@@ -379,48 +387,132 @@ function genLevel(theme,diff,seed,hard){
     const sz=sizes(n),t=[{in:(x,z,r)=>inPoly(E,x,z,r+.14)},...walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}))],reg=[-Ws/2,Ws/2,-Ds/2,Ds/2],hp=scatter(rnd,rw(sz),reg,t,.3),bp=hp&&scatter(rnd,rb(sz),reg,t,.25);
     if(!bp)return null;const Lv={W:Ws,D:Ds,shape,walls,balls:bp.map((q,k)=>[q[0],q[1],sz[k]]),holes:hp.map((q,k)=>[q[0],q[1],sz[k]])};
     if(diff>5)Lv.balls.forEach(b=>{if(rnd()<.2)b[3]='s'});return Lv}
-  if(theme===6){ // pillar grid: a lattice of blocks with a few lanes bricked up
-    const sz=Array.from({length:n},()=>pick(kinds.filter(x=>x<3))),walls=[],xs=[-1.6,0,1.6],zs=[-2.4,-.8,.8,2.4];
-    xs.forEach(x=>zs.forEach(z=>walls.push([x,z,.7,.7])));
-    for(let k=Math.min(7,1+(diff/2|0));k>0;k--){if(rnd()<.5){const i=rnd()*2|0,j=rnd()*4|0;walls.push([(xs[i]+xs[i+1])/2,zs[j],.9,WT])}else{const i=rnd()*3|0,j=rnd()*3|0;walls.push([xs[i],(zs[j]+zs[j+1])/2,WT,.9])}}
-    const t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),hp=scatter(rnd,rw(sz),[-hw,hw,-hd,hd],t,.18),bp=hp&&scatter(rnd,rb(sz),[-hw,hw,-hd,hd],t,.18);
-    if(!bp||!connected(W,D,walls,[...bp,...hp],.36))return null;return mk(sz,bp,hp,{walls})}
+  if(theme===6){ // block grid: fixed pillars on every other square with loose bricks between them, like an arcade bomb maze
+    const cs=.9,Cn=7,Rn=9,Wg=Cn*cs,Dg=Rn*cs,P=(i,j)=>[+((i+.5)*cs-Wg/2).toFixed(2),+((j+.5)*cs-Dg/2).toFixed(2)],walls=[],free=[];
+    for(let j=0;j<Rn;j++)for(let i=0;i<Cn;i++){if(i%2&&j%2)walls.push([...P(i,j),.84,.84]);else free.push([i,j])}
+    for(let a=free.length-1;a>0;a--){const b=rnd()*(a+1)|0;[free[a],free[b]]=[free[b],free[a]]}
+    n=Math.min(n,7);const sz=Array.from({length:n},()=>pick(kinds.filter(x=>x<3))),top=free.filter(q=>q[1]<2),rest=free.filter(q=>q[1]>=3);
+    const bp=top.slice(0,n).map(q=>P(q[0],q[1])),hp=rest.slice(0,n).map(q=>P(q[0],q[1]));
+    const bricks=rest.slice(n).concat(free.filter(q=>q[1]===2)),nbk=Math.min(bricks.length,Math.round(free.length*Math.min(.28,.12+diff*.014)));
+    bricks.slice(0,nbk).forEach(q=>walls.push([...P(q[0],q[1]),.84,.84]));
+    if(!connected(Wg,Dg,walls,[...bp,...hp],.36))return null;return{W:Wg,D:Dg,walls,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
   if(theme===7){ // tower: three floors stepping down toward you, wells on every floor
     n=clamp(n,4,7);const sz=sizes(n),fd=D/3,decks=[[0,-hd+fd/2,W,fd,1],[0,-hd+fd*1.5,W,fd,.5]],cnt=[1,1,1],t=[],portals=[];
     for(let k=3;k<n;k++)cnt[rnd()*3|0]++;
     if(diff>6&&rnd()<.5){const p=[pick([-2.5,2.5]),hd-.8,pick([-2.5,2.5]),-hd+fd-.55];portals.push(p);t.push({x:p[0],z:p[1],r:PR+.1},{x:p[2],z:p[3],r:PR+.1})} // a lift back to the top
     const hp=[];let o=0;for(let f=0;f<3;f++){const q=scatter(rnd,rw(sz.slice(o,o+cnt[f])),[-hw,hw,-hd+fd*f+(f?.4:1.15),-hd+fd*(f+1)-(f<2?.35:0)],t,.25);if(!q)return null;hp.push(...q);o+=cnt[f]}
     return mk(sz,row(n,-hd+.55,.86),hp,{decks,portals})}
-  const C=5+Math.min(3,diff/4|0),Rw=Math.min(10,C+1+(rnd()<.5?1:0)+(hard?1:0)),k=Math.min(6,3+(diff/4|0));
-  return {maze:[C,Rw,seed],sz:Array.from({length:k},()=>pick(kinds.filter(x=>x<3)))};
+  if(theme===9){ // swarm: a big table and a crowd of small balls
+    const Wb=8,Db=10,k=clamp(Math.round(diff*2.3)-3,10,40),sz=Array.from({length:k},()=>rnd()<(k>20?.75:.5)?0:1),t=[],reg=[-Wb/2,Wb/2,-Db/2,Db/2],gp=k>20?.16:.26,hp=scatter(rnd,rw(sz),reg,t,gp),bp=hp&&scatter(rnd,rb(sz),reg,t,gp); // the crowd grows from 10 balls toward 40
+    if(!bp)return null;return{W:Wb,D:Db,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
+  if(theme===10){ // ring maze: nested walls with one doorway each, like the pocket ball-in-a-maze toy
+    const Wr=6.6,Dr=8.4,nr=diff>6||hard?3:2,st=(Wr/2)/(nr+1),walls=[],reg=[-Wr/2,Wr/2,-Dr/2,Dr/2];
+    for(let j=1;j<=nr;j++){const x=Wr/2-j*st,z=Dr/2-j*st,side=j%2?1:-1,g=Math.min(1.1,2*x-.5),gx=+((rnd()-.5)*Math.max(0,2*x-g-.4)).toFixed(2),l=gx-g/2+x,r=x-gx-g/2;
+      walls.push([0,-side*z,2*x+WT,WT],[-x,0,WT,2*z],[x,0,WT,2*z]);
+      if(l>.05)walls.push([+(-x+l/2).toFixed(2),side*z,+l.toFixed(2),WT]);if(r>.05)walls.push([+(x-r/2).toFixed(2),side*z,+r.toFixed(2),WT])}
+    n=Math.min(n,nr===3?5:6);const sz=Array.from({length:n},()=>nr===3?(rnd()<.5?0:1):pick(diff<3?[1]:[0,1,1,2]));
+    const depth=(x,z)=>Math.min(Wr/2-Math.abs(x),Dr/2-Math.abs(z)),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),inner=Math.min(n-1,nr===3?2:3);
+    const heart=scatter(rnd,rw(sz.slice(0,inner)),reg,[{in:(x,z,r)=>depth(x,z)>nr*st+r+.12},...t],.2);
+    const mid=heart&&(inner<n?scatter(rnd,rw(sz.slice(inner)),reg,[{in:(x,z,r)=>depth(x,z)>st+r+.12&&depth(x,z)<nr*st-r-.12},...t],.2):[]);
+    const bp=mid&&scatter(rnd,rb(sz),reg,[{in:(x,z,r)=>depth(x,z)<st-r-.12},...t],.2);
+    if(!bp||!connected(Wr,Dr,walls,[...bp,...heart,...mid],.3))return null;return{W:Wr,D:Dr,walls,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:[...heart,...mid].map((q,i)=>[q[0],q[1],sz[i]])}}
+  if(theme===11){ // the loop: one corridor round a solid block, pinched by stub walls
+    const Wl=6.6,Dl=8,cw=1.5,bx=Wl/2-cw,bz=Dl/2-cw,walls=[[0,0,2*bx,2*bz]],len=.75;
+    for(let k=1+Math.min(3,diff/4|0)+(hard?1:0),t=0;k>0&&t<60;t++){const s=rnd()*4|0,out=rnd()<.5,a=s<2?lerp(-bx+.4,bx-.4,rnd()):lerp(-bz+.4,bz-.4,rnd());
+      const w=(s<2?[a,(s?1:-1)*(out?Dl/2-len/2:bz+len/2),WT,len]:[(s===2?1:-1)*(out?Wl/2-len/2:bx+len/2),a,len,WT]).map(v=>+v.toFixed(2));
+      if(walls.slice(1).some(o=>Math.hypot(o[0]-w[0],o[1]-w[1])<1.6))continue;walls.push(w);k--}
+    n=Math.min(n,6);const sz=Array.from({length:n},()=>diff<4?1:rnd()<.4?0:1),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}));
+    const hp=scatter(rnd,rw(sz),[-Wl/2,Wl/2,-bz+.6,Dl/2],t,.3),bp=hp&&scatter(rnd,rb(sz),[-Wl/2,Wl/2,-Dl/2,-bz],t,.15);
+    if(!bp||!connected(Wl,Dl,walls,[...bp,...hp],.3))return null;return{W:Wl,D:Dl,walls,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
+  const sc=diff>3?.8:1,C=sc<1?8:5+Math.min(2,diff/2|0),Rw=Math.min(sc<1?12:9,C+2+(rnd()<.5?1:0)+(hard?1:0)),k=Math.min(6,3+(diff/4|0)); // small cells later: 8 x 12 lanes on the same table
+  return {maze:[C,Rw,seed,sc],sz:Array.from({length:k},()=>pick(sc<1?[0,1]:kinds.filter(x=>x<3)))};
 }
+// ---------- pieces ----------
+// Extra pieces the engine can drop onto a finished layout. Each returns false when it does not fit, and every
+// obstacle is re-checked so a ball can still roll from every start to every well.
+const rectOf=w=>({x:w[0],z:w[1],w:w[2],d:w[3]});
+const prd=(px,pz,w)=>Math.hypot(px-clamp(px,w[0]-w[2]/2,w[0]+w[2]/2),pz-clamp(pz,w[1]-w[3]/2,w[1]+w[3]/2)); // point to rectangle
+const MOD_TIP={bump:'Spring bumpers kick a ball away. Use them to bank a shot, or keep clear.',belt:'The striped belts carry a ball along. Ride them or fight them.',
+  split:'Hit the gold x2 bumper: it splits one ball into two. There is a well for each.',hot:'Red walls are explosive. One touch and the level starts over.',
+  poles:'Two odd balls have no well. The blue one pulls every ball toward it, the red one pushes them away.',slip:'A slick table: the lightest tilt sends everything flying. Balance it.',
+  open:'No rails here. If one ball rolls off the edge, the level starts over.'};
+const MOD_TAG={bump:'Spring bumpers',belt:'Conveyor belts',split:'Ball splitter',hot:'Explosive walls',poles:'Pole balls',slip:'Slick table',open:'No rails'};
+function addMod(L,m,rnd,diff){
+  if(m==='slip'){if(L.slip)return false;L.slip=1;return true}
+  if(m==='open'&&L.decks&&L.decks.length){if(L.open||L.balls.length>6||(L.portals&&L.portals.length))return false;L.open=1;return true} // floors with no rails
+  if(L.maze||L[m]||(L.decks&&L.decks.length)||(L.portals&&L.portals.length)||(L.gates&&L.gates.length)||(L.movers&&L.movers.length))return false;
+  const W=L.W,D=L.D,E=L.shape?edgesOf(SHAPES[L.shape](W,D)):null,reg=[-W/2,W/2,-D/2,D/2];L.walls=L.walls||[];
+  const solid=()=>[...L.walls,...(L.hot||[]),...(L.bump||[]).concat(L.split||[]).map(b=>[b[0],b[1],b[2]*2,b[2]*2])];
+  const taken=pad=>[...(E?[{in:(x,z,r)=>inPoly(E,x,z,r+.25)}]:[]),...solid().map(rectOf),...(L.belts||[]).map(rectOf),...L.balls.map(b=>({x:b[0],z:b[1],r:SZ[b[2]]+pad})),...L.holes.map(h=>({x:h[0],z:h[1],r:RW[h[2]]+pad*.7})),...(L.poles||[]).map(q=>({x:q[0],z:q[1],r:.25+pad}))];
+  const ok=r=>connected(W,D,solid(),[...L.balls,...L.holes],r||.46,E);
+  const corners=(w,mg)=>!E||[[-1,-1],[1,-1],[1,1],[-1,1]].every(c=>inPoly(E,w[0]+c[0]*w[2]/2,w[1]+c[1]*w[3]/2,mg));
+  if(m==='open'){if(L.walls.length>4||L.balls.length>7||L.split)return false; // balls that start too near the edge leave, with their wells
+    const near=b=>E?!inPoly(E,b[0],b[1],.8):Math.abs(b[0])>W/2-.8||Math.abs(b[1])>D/2-.8,keepers=L.balls.map((b,i)=>i).filter(i=>!near(L.balls[i]));
+    if(keepers.length<3)return false;L.balls=keepers.map(i=>L.balls[i]);L.holes=keepers.map(i=>L.holes[i]);L.open=1;return true}
+  if(m==='poles'){const q=scatter(rnd,[.25,.25],reg,taken(.5),.3);if(!q)return false;L.poles=[[q[0][0],q[0][1],1],[q[1][0],q[1][1],-1]];return true}
+  if(m==='bump'){const k=2+Math.min(2,diff/5|0),q=scatter(rnd,Array(k).fill(.3),reg,taken(.45),.35);if(!q)return false;L.bump=q.map(v=>[v[0],v[1],.3]);if(ok())return true;delete L.bump;return false}
+  if(m==='split'){const k=diff>8?2:1;if(L.balls.length+k>9)return false; // every ball becomes one size, so a twin always has a well that fits
+    const sv=JSON.stringify([L.balls,L.holes]);L.balls.forEach(b=>b[2]=1);L.holes.forEach(h=>h[2]=1);
+    const q=scatter(rnd,Array(k).fill(.3),reg,taken(.45),.35),hp=q&&scatter(rnd,Array(k).fill(RW[1]),reg,[...taken(.3),...q.map(v=>({x:v[0],z:v[1],r:.75}))],.3);
+    if(hp){L.split=q.map(v=>[v[0],v[1],.3]);L.holes.push(...hp.map(v=>[v[0],v[1],1]));if(ok())return true;L.holes.length-=k;delete L.split}
+    const o=JSON.parse(sv);L.balls=o[0];L.holes=o[1];return false}
+  if(m==='hot'){const hot=[];if(L.balls.length>7)return false;
+    for(let t=0;t<160&&hot.length<2;t++){const len=1.2+rnd()*.7,hor=rnd()<.5,w=[+lerp(-W/2+1,W/2-1,rnd()).toFixed(2),+lerp(-D/2+1,D/2-1,rnd()).toFixed(2),hor?+len.toFixed(2):.22,hor?.22:+len.toFixed(2)];
+      if(!corners(w,.2)||L.balls.some(b=>prd(b[0],b[1],w)<1.05)||L.holes.some(h=>prd(h[0],h[1],w)<.85)||(L.poles||[]).some(q=>prd(q[0],q[1],w)<1.2))continue;
+      if([...solid(),...hot,...(L.belts||[])].some(o=>Math.abs(w[0]-o[0])<(w[2]+o[2])/2+.8&&Math.abs(w[1]-o[1])<(w[3]+o[3])/2+.8))continue;hot.push(w)}
+    if(!hot.length)return false;L.hot=hot;if(ok(.6))return true;delete L.hot;return false}
+  if(m==='belt'){const bl=[];
+    for(let t=0;t<160&&bl.length<(diff>6?2:1);t++){const len=2+rnd()*1.2,hor=rnd()<.5,sg=rnd()<.5?1:-1,w=[+lerp(-W/2+1.2,W/2-1.2,rnd()).toFixed(2),+lerp(-D/2+1.2,D/2-1.2,rnd()).toFixed(2),hor?+len.toFixed(2):1.1,hor?1.1:+len.toFixed(2),hor?sg:0,hor?0:sg,+(1.6+rnd()*.8).toFixed(1)];
+      if(Math.abs(w[0])+w[2]/2>W/2-.05||Math.abs(w[1])+w[3]/2>D/2-.05||!corners(w,.05))continue;
+      if(L.balls.some(b=>prd(b[0],b[1],w)<SZ[b[2]]+.2)||L.holes.some(h=>prd(h[0],h[1],w)<RW[h[2]]+.15))continue;
+      if([...solid(),...bl].some(o=>Math.abs(w[0]-o[0])<(w[2]+o[2])/2+.1&&Math.abs(w[1]-o[1])<(w[3]+o[3])/2+.1))continue;bl.push(w)}
+    if(!bl.length)return false;L.belts=bl;return true}
+  return false}
 // ---------- chapters ----------
-// Ten stops each: four levels, a hard board, four more levels, then a boss. Board types are mixed inside every
-// chapter and one new type arrives per chapter; a type's hand-made boards (with their tips) are dealt first.
-const HAND=LEVELS.splice(0);HAND.forEach(l=>l.theme=l.w);
+// Twelve stops a chapter, paced as tension and release: an easy opener after the last boss, a climb to a hard board
+// at stop 5, a breather, a second hard board at stop 9, a breather, then the boss. Every chapter brings something
+// new (a board type, a piece, or both), taught first on a simple board and then mixed into everything after it.
+const CH=12;
+const NEWT=[[0,8],[1],[5,2],[10,7],[9,6],[3,11],[4]]; // board types arriving in chapters 1, 2, 3... Everything has been met by level 96; after that it only gets denser
+const NEWM=['','bump','open','belt','split','poles','slip','hot']; // pieces arriving in chapters 2, 3, 4...
+const MODOK=t=>t===0||t===1||t===8||t===9, MAZE=t=>t===5||t===6||t===10||t===11;
+const HAND=LEVELS.splice(0).filter(l=>l.w!==5);HAND.forEach(l=>l.theme=l.w);
 const handQ=t=>HAND.filter(l=>l.theme===t&&!l.f&&!l.used), handF=t=>HAND.filter(l=>l.theme===t&&l.f&&!l.used);
-const CHAPTERS=[],seenT={},ORDER=[0,8,1,2,3,4,5,6,7];
-for(let c=0;c*10<TOTAL_STAGES;c++){
-  const rnd=rng(4242+c*17),types=ORDER.slice(0,Math.min(9,c+2)),fresh=c>=1&&c<=7?ORDER[c+1]:-1;
+const CHAPTERS=[],seenT={},seenM={};let lastMz=-1;
+for(let c=0;c*CH<TOTAL_STAGES;c++){
+  const rnd=rng(4242+c*17),types=NEWT.slice(0,c+1).flat(),mods=NEWM.slice(1,c+1),fresh=NEWT[c]||[],newM=NEWM[c]||'';
   CHAPTERS.push({name:'Chapter '+(c+1),card:WORLDS[c%WORLDS.length].card});
-  const seq=c===0?[0,0,0,8,0,0,8,8]:fresh>=0?[fresh,fresh]:[];while(seq.length<8){const t=types[rnd()*types.length|0];if(seq[seq.length-1]!==t)seq.push(t)}
-  const put=(L,t,extra)=>{L.w=c;L.pal=PAL_OF[t];Object.assign(L,extra);if(!L.name){const nr=rng(c*31+LEVELS.length*7+3);L.name=NA[nr()*NA.length|0]+' '+NB[nr()*NB.length|0]}
+  const flat=types.filter(t=>!MAZE(t)),mz=types.filter(MAZE),freshMz=fresh.filter(MAZE),freshFl=fresh.filter(t=>!MAZE(t));
+  const seq=c===0?[0,0,0,8,0,8,0,8,8]:[],any=()=>{let t;do t=flat[rnd()*flat.length|0];while(t===seq[seq.length-1]);return t};
+  if(c>0){seq.push(freshFl.length?freshFl[0]:any());seq.push(newM?0:any());if(freshFl.length)seq.push(freshFl[0]);while(seq.length<9)seq.push(any())}
+  const teach=c>0&&newM?1:-1;let reg=0,mzN=0;
+  const put=(L,t,extra)=>{L.w=c;L.theme=t;L.pal=PAL_OF[t];Object.assign(L,extra);if(!L.name){const nr=rng(c*31+LEVELS.length*7+3);L.name=NA[nr()*NA.length|0]+' '+NB[nr()*NB.length|0]}
+    (L.mods||[]).forEach(m=>{if(!seenM[m]){seenM[m]=1;L.tip=MOD_TIP[m]}});
     if(!seenT[t]){seenT[t]=1;if(!L.tip&&FIRST_TIP[t])L.tip=FIRST_TIP[t]}LEVELS.push(L)};
-  const make=(t,k,hard,boss)=>{const diff=1+c*.6+k*.25+(hard?3:0)+(boss?5:0);let L=null;
-    for(let a=0;a<40&&!L;a++)L=genLevel(t,diff|0,1000+c*97+k*13+a*7919,hard||boss);return L||genLevel(0,1,5000+c*7+k,false)};
-  const regular=k=>{const t=seq.shift(),q=handQ(t)[0];if(q){q.used=1;put(q,t)}else put(make(t,k,false),t)};
-  for(let k=0;k<4;k++)regular(k);
-  const ft=types.find(t=>handF(t).length);
-  if(ft!=null){const q=handF(ft)[0];q.used=1;put(q,ft)}
-  else{const t=types[rnd()*types.length|0];put(make(t,4,true),t,{f:1,tag:HARDTAG[t]})}
-  for(let k=5;k<9;k++)regular(k);
-  const bt=types[rnd()*types.length|0];put(make(bt,9,false,true),bt,{boss:1});
+  const make=(t,k,hard,boss,want)=>{const ease=k===0||k===5||k===9?1:0,diff=Math.max(1,1+Math.min(c,20)*.5+k*.2-ease+(hard?3:0)+(boss?5:0))|0;let L=null;
+    for(let a=0;a<40&&!L;a++){const seed=1000+c*97+k*13+a*7919;L=genLevel(t,diff,seed,hard||boss,want.includes('open')||want.includes('hot')?(hard||boss?5:4):want.includes('split')?6:0);
+      if(L&&want.length){const mr=rng(seed+5);for(const m of want)if(addMod(L,m,mr,diff))(L.mods=L.mods||[]).push(m);if(!L.mods&&a<30)L=null}} // keep looking until a wanted piece fits
+    return L||genLevel(0,1,5000+c*7+k,false)};
+  const wants=(t,n)=>{const out=[],pool=MODOK(t)?mods:rnd()<.5?mods.filter(m=>m==='slip'):[];for(let g=0;g<8&&out.length<Math.min(n,pool.length);g++){const m=pool[rnd()*pool.length|0],clash=(m==='hot'&&(out.includes('slip')||out.includes('split')))||((m==='slip'||m==='split')&&out.includes('hot'));if(!out.includes(m)&&!clash)out.push(m)}return out};
+  const regular=k=>{const r=reg++;let t=seq[r];if(r===teach){put(make(0,k,false,false,[newM]),0);return}
+    if((k===2||k===6||k===10)&&mz.length){ // every fourth stop is a maze of some kind
+      let x=freshMz.length&&!mzN?freshMz[0]:-1;if(x<0)do x=mz[rnd()*mz.length|0];while(x===lastMz&&mz.length>1);mzN++;lastMz=x;
+      put(make(x,k,false,false,rnd()<.2?wants(x,1):[]),x);return}
+    if((k===3||k===7)&&mods.includes('open')){ // every fourth stop the rails come off: a flat table with bumpers, or a table with floors
+      const floors=types.filter(x=>x===2||x===7),flat=[0,8,1];t=floors.length&&rnd()<.45?floors[rnd()*floors.length|0]:flat[rnd()*3|0];
+      put(make(t,k,false,false,t===2||t===7?['open']:rnd()<.65?['bump','open']:['open']),t);return}
+    const q=handQ(t)[0];if(q){q.used=1;put(q,t);return}
+    put(make(t,k,false,false,rnd()<(MODOK(t)?(c>=8?.8:.6):.14)?wants(t,c>=12&&rnd()<.35?2:1):[]),t)};
+  const hardOne=k=>{const ft=types.find(t=>handF(t).length);if(ft!=null){const q=handF(ft)[0];q.used=1;put(q,ft);return}
+    const tp=mods.length&&rnd()<.6?types.filter(MODOK):types,t=tp[rnd()*tp.length|0],L=make(t,k,true,false,wants(t,1+(rnd()<.4?1:0)));put(L,t,{f:1,tag:L.mods?MOD_TAG[L.mods[0]]:HARDTAG[t]})};
+  for(let k=0;k<CH;k++){if(k===4||k===8)hardOne(k);else if(k===CH-1){const pool=mods.length?types.filter(MODOK):flat,bt=pool[rnd()*pool.length|0];put(make(bt,k,false,true,wants(bt,2)),bt,{boss:1})}else regular(k)}
 }
 const norm=L=>{
   if(L.maze&&!L.balls)Object.assign(L,buildMaze(L));
   if(L.shape){L.poly=SHAPES[L.shape](L.W,L.D);L.edges=edgesOf(L.poly)}
   L.walls=L.walls||[];L.decks=L.decks||[];L.portals=L.portals||[];L.gates=L.gates||[];L.plates=L.plates||[];L.movers=L.movers||[];
-  const n=L.balls.length, base=L.maze?L.W*L.D*.5+4*n:5+3.5*n+(L.walls.length?5:0)+(L.decks.length?8:0);
+  L.bump=L.bump||[];L.split=L.split||[];L.belts=L.belts||[];L.hot=L.hot||[];L.poles=L.poles||[];L.need=L.balls.length+L.split.length;
+  const n=L.balls.length, base=L.maze?L.W*L.D*.5+4*n:5+3.5*L.need+(L.walls.length?5:0)+(L.decks.length?8:0)+(L.hot.length||L.open?6:0);
   L.par=[Math.round(base*.7),Math.round(base*1.6)];
 };
 LEVELS.forEach(norm);
@@ -434,10 +526,10 @@ const DAILY=LEVELS.length;
   norm(L);Object.assign(L,{w:-1,pal:PAL_OF[t],name:'Daily board',label:'Daily',daily:day,stage:-1});LEVELS.push(L)})();
 
 // ---------- save ----------
-const KEY='marble-hush-v5';
+const KEY='marble-hush-v6';
 let save={best:{}};
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.best)save=s;
-  else{const o=JSON.parse(localStorage.getItem('marble-hush-v4')); // the level list changed: keep the count of stages cleared, not the old indexes
+  else{const o=JSON.parse(localStorage.getItem('marble-hush-v5')||localStorage.getItem('marble-hush-v4')); // the level list changed: keep the count of stages cleared, not the old indexes
     if(o&&o.best){const n=Math.min(STAGES.length-1,Object.keys(o.best).length);for(let k=0;k<n;k++)save.best[STAGES[k][0]]=999;save.streak=o.streak;save.dailyDay=o.dailyDay;localStorage.setItem(KEY,JSON.stringify(save))}}}catch(e){}
 const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}};
 const starsFor=(i,t)=>t==null?0:t<=LEVELS[i].par[0]?3:t<=LEVELS[i].par[1]?2:1;
@@ -518,7 +610,10 @@ const rig=new THREE.Group(), board=new THREE.Group();rig.add(board);scene.add(ri
 const ballGeo=SZ.map(r=>new THREE.SphereGeometry(r,44,30)), stoneGeo=SZ.map(r=>new THREE.IcosahedronGeometry(r*1.08,0));
 const ringGeo=RW.map(r=>{const g=new THREE.RingGeometry(r+.015,r+.07,48);g.rotateX(-Math.PI/2);return g});
 const rippleGeo=new THREE.RingGeometry(.86,1,48);rippleGeo.rotateX(-Math.PI/2);
-let cur=-1,L=null,WD=null,balls=[],holes=[],rects=[],decks=[],pads=[],gates=[],plates=[],movers=[],ripples=[],own=[];
+let cur=-1,L=null,WD=null,balls=[],holes=[],rects=[],decks=[],pads=[],gates=[],plates=[],movers=[],ripples=[],own=[],bumps=[],belts=[],hots=[],addBall=null,bot=0;
+const haloGeo=new THREE.SphereGeometry(1,24,16);
+function beltTex(){const cv=document.createElement('canvas');cv.width=cv.height=64;const g=cv.getContext('2d');g.fillStyle='rgba(6,8,24,.55)';g.fillRect(0,0,64,64);g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=7;g.lineCap='round';g.lineJoin='round';g.beginPath();g.moveTo(14,44);g.lineTo(32,24);g.lineTo(50,44);g.stroke();const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+function x2Tex(){const cv=document.createElement('canvas');cv.width=cv.height=128;const g=cv.getContext('2d');g.fillStyle='#ffd23a';g.beginPath();g.arc(64,64,62,0,6.2832);g.fill();g.fillStyle='#2a1800';g.font='900 70px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('\u00d72',64,68);const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;return t}
 const PLR=.42, HOLD=5.2; // plate radius, and how hard a plate grips a resting marble
 const PCOL=['#3ff5ff','#ff4fd8','#b6ff3a'];
 const padRing=new THREE.RingGeometry(PR-.07,PR,48),padDisc=new THREE.CircleGeometry(PR-.07,40),padBeam=new THREE.CylinderGeometry(PR-.03,PR-.03,.7,40,1,true);padRing.rotateX(-Math.PI/2);padDisc.rotateX(-Math.PI/2);
@@ -532,13 +627,13 @@ function floorTex(c){
   const rg=g.createRadialGradient(256,150,10,256,256,380);rg.addColorStop(0,'rgba(255,255,255,.08)');rg.addColorStop(.5,'rgba(255,255,255,0)');rg.addColorStop(1,'rgba(0,0,0,.35)');g.fillStyle=rg;g.fillRect(0,0,512,512);
   const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;
 }
-function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[]}
+function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[];bumps=[];belts=[];hots=[]}
 const keep=o=>(own.push(o),o);
 const inRect=(d,x,z)=>x>d.x0&&x<d.x1&&z>d.z0&&z<d.z1;
 const deckAt=(x,z,below=1e9)=>{let best=null;for(const d of decks)if(d.top<below-.01&&inRect(d,x,z)&&(!best||d.top>best.top))best=d;return best};
 function load(i){
   clearBoard();cur=i;L=LEVELS[i];WD=WORLDS[L.pal];run++;
-  wild=L.boss?Math.max(.25,1-((tries[i]||1)-1)*.25):0; // a boss plays wild, and calms down a little with each retry
+  wild=L.boss?Math.max(.2,.6-((tries[i]||1)-1)*.2):0; // a boss plays wild, and calms down a little with each retry
   const {W,D}=L, RIM=.12;
   document.documentElement.style.setProperty('--accent',WD.accent);
   L.decks.forEach(([x,z,w,d,h])=>decks.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,top:h,x,z,w,d}));
@@ -563,11 +658,23 @@ function load(i){
   // tray: frame + base
   const fs=P?outline(new THREE.Shape(),grow(P,L.edges,RIM)):rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();if(P)outline(inner,P);else{inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath()}fs.holes.push(inner);
   const frg=keep(new THREE.ExtrudeGeometry(fs,{depth:WELL+.08+WALLH,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:3,curveSegments:16}));frg.rotateX(-Math.PI/2);frg.translate(0,-WELL-.08,0);
-  const frame=new THREE.Mesh(frg,rimMat);frame.castShadow=frame.receiveShadow=true;board.add(frame);
+  const frame=new THREE.Mesh(frg,rimMat);frame.castShadow=frame.receiveShadow=true;if(!L.open)board.add(frame);
   let bg;if(P){bg=keep(new THREE.ExtrudeGeometry(outline(new THREE.Shape(),P),{depth:.08,bevelEnabled:false}));bg.rotateX(-Math.PI/2);bg.translate(0,-.04,0)}else bg=keep(new THREE.BoxGeometry(W,.08,D));
   const base=new THREE.Mesh(bg,dark);base.position.y=-WELL-.04;board.add(base);
   // walls stand on whatever surface is under them
   L.walls.forEach(([x,z,w,d])=>{const dk=deckAt(x,z),h=dk?dk.top:0;const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH,d)),rimMat);m.position.set(x,h+WALLH/2,z);m.castShadow=m.receiveShadow=true;board.add(m);rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h})});
+  // explosive walls: one touch and the level starts over
+  L.hot.forEach(([x,z,w,d])=>{const mt=keep(new THREE.MeshStandardMaterial({color:0x3a0606,emissive:0xff2a1a,emissiveIntensity:.9,roughness:.4}));
+    const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH*1.1,d)),mt);m.position.set(x,WALLH*.55,z);m.castShadow=true;board.add(m);hots.push(mt);rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h:0,hot:1})});
+  // conveyor belts
+  L.belts.forEach(([x,z,w,d,dx,dz,sp])=>{const len=dx?w:d,wid=dx?d:w,tx=keep(beltTex());tx.repeat.set(Math.max(1,Math.round(wid/.55)),len/.6);
+    const g=keep(new THREE.PlaneGeometry(wid,len));g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,keep(new THREE.MeshBasicMaterial({map:tx,transparent:true,opacity:.9,depthWrite:false})));m.position.set(x,.008,z);m.rotation.y=Math.atan2(-dx,-dz);board.add(m);
+    belts.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,dx,dz,sp,tex:tx})});
+  // spring bumpers, and gold x2 bumpers that split the first ball to hit them
+  const addBump=([x,z,r],split)=>{const c=col(split?'#ffd23a':WD.accent),mt=keep(new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.35),emissive:c,emissiveIntensity:.5,roughness:.3,metalness:.4}));
+    const m=new THREE.Mesh(keep(new THREE.CylinderGeometry(r*.9,r,WALLH*1.25,32)),mt);m.position.set(x,WALLH*.625,z);m.castShadow=true;board.add(m);const u={x,z,r,split,used:0,mesh:m,mat:mt,flash:0};
+    if(split){u.cap=new THREE.Mesh(keep(new THREE.CircleGeometry(r*.86,32)),keep(new THREE.MeshBasicMaterial({map:keep(x2Tex())})));u.cap.rotation.x=-Math.PI/2;u.cap.position.set(x,WALLH*1.25+.006,z);board.add(u.cap)}bumps.push(u)};
+  L.bump.forEach(b=>addBump(b,0));L.split.forEach(b=>addBump(b,1));
   // wells
   hl.forEach(h=>{
     const c=col(TINT[h.s]);
@@ -596,23 +703,26 @@ function load(i){
     pair[0].twin=pair[1];pair[1].twin=pair[0];pads.push(...pair)});
   // marbles and stones
   const nb=L.balls.length,rnd=rng(977+i*31),order=[...Array(nb).keys()];for(let a=nb-1;a>0;a--){const c=rnd()*(a+1)|0;[order[a],order[c]]=[order[c],order[a]]}
-  L.balls.forEach(([x,z,s,t],k)=>{
-    const stone=t==='s', c=col(TINT[s]);
-    const m=keep(stone?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.25,roughness:.38,flatShading:true,envMapIntensity:.9,emissive:c,emissiveIntensity:0})
+  addBall=(x,z,s,t,ka,pole)=>{
+    const stone=false, c=col(pole?(pole>0?'#35d8ff':'#ff5a3c'):TINT[s]);
+    const m=keep(pole?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.3,roughness:.25,envMapIntensity:1,emissive:c,emissiveIntensity:.8})
+      :stone?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.25,roughness:.38,flatShading:true,envMapIntensity:.9,emissive:c,emissiveIntensity:0})
       :new THREE.MeshPhysicalMaterial({color:c.clone().multiplyScalar(s===1?.18:.5),metalness:.85,roughness:.15,clearcoat:1,clearcoatRoughness:.05,envMapIntensity:1.5,emissive:c,emissiveIntensity:0}));
     const mesh=new THREE.Mesh(stone?stoneGeo[s]:ballGeo[s],m);mesh.castShadow=true;board.add(mesh);
-    const dk=deckAt(x,z);
-    balls.push({x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,h:dk?dk.top:0,deck:dk,ka:nb>1?.68+.64*order[k]/(nb-1):1,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:.55+k*.07,mesh,mat:m,q:new THREE.Quaternion()});
-  });
+    if(pole){const halo=new THREE.Mesh(haloGeo,keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.16,blending:THREE.AdditiveBlending,depthWrite:false})));halo.scale.setScalar(SZ[s]*1.7);mesh.add(halo)}
+    const dk=deckAt(x,z),b={x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,pole:pole||0,off:0,offY:0,offV:0,mag:[],h:dk?dk.top:0,deck:dk,ka,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:0,mesh,mat:m,q:new THREE.Quaternion()};
+    balls.push(b);return b};
+  L.balls.forEach(([x,z,s,t],k)=>{addBall(x,z,s,t,nb>1&&!L.open?.68+.64*order[k]/(nb-1):1,0).drop=.55+k*.07});
+  L.poles.forEach(([x,z,sg],k)=>{addBall(x,z,1,null,1,sg).drop=.6+(nb+k)*.07});
   // Hidden magnets: every ball is pushed away from two unseen spots of its own, so no two balls answer a tilt the
   // same way and each has to be steered on its own. A magnet never sits near the ball's start or a well it fits.
-  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.walls.length>10?.5:1);
-  balls.forEach(b=>{b.mag=[];for(let t=0;MS&&t<80&&b.mag.length<2;t++){const x=(rnd()-.5)*(W-1),z=(rnd()-.5)*(D-1);
+  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.theme===10||L.theme===11?.3:L.walls.length>10?.5:1)*(L.open?0:L.hot.length?.5:1)*(nb>9?.5:1)*(L.slip?.6:1);
+  balls.forEach(b=>{b.mag=[];for(let t=0;MS&&!b.pole&&t<80&&b.mag.length<2;t++){const x=(rnd()-.5)*(W-1),z=(rnd()-.5)*(D-1);
     if(L.edges&&!inPoly(L.edges,x,z,.4))continue;
     if(Math.hypot(x-b.x,z-b.z)<1.4||holes.some(h=>h.s===b.s&&Math.hypot(x-h.x,z-h.z)<1.9)||b.mag.some(m=>Math.hypot(x-m[0],z-m[1])<1.5))continue;
     b.mag.push([x,z,MS*(.8+rnd()*.4)])}});
   for(let k=0;k<8;k++){const m=keep(new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));const r=new THREE.Mesh(rippleGeo,m);r.visible=false;board.add(r);ripples.push({mesh:r,t:1,size:1})}
-  tilt.x=tilt.y=tilt.vx=tilt.vy=target.x=target.y=0;time=0;started=false;placed=0;
+  tilt.x=tilt.y=tilt.vx=tilt.vy=target.x=target.y=0;time=0;started=false;placed=0;combo=0;lastCap=-9;
   const s=Math.max(W,D)*1.3;sun.shadow.camera.left=-s;sun.shadow.camera.right=s;sun.shadow.camera.top=s;sun.shadow.camera.bottom=-s;sun.shadow.camera.far=40;sun.shadow.camera.updateProjectionMatrix();
   $('#lvname').textContent=L.label+' · '+L.name;updateHUD();placeCamera();setSky(L.pal);
 }
@@ -632,11 +742,19 @@ function capture(b,h){
   if(b.wrong){ // a smaller marble has dropped into a bigger well: it blocks the well until it is tapped out
     h.ring.material.color.copy(RED);h.ring.material.blending=THREE.NormalBlending;h.ring.material.needsUpdate=true;h.ring.scale.setScalar(1.14);ripple(h.x,h.h,h.z,1.2,'#ff2a3a');sfx('knock');buzz('tick');
     const t=$('#hint');t.textContent='Wrong well. Tap the marble to pop it out.';t.style.opacity=1;return}
-  placed++;updateHUD(true);
+  placed++;updateHUD(true);combo=clock-lastCap<3?combo+1:1;lastCap=clock;
+  if(combo>1&&placed<L.need){toast(combo>3?'On fire  x'+combo:'Combo  x'+combo,TINT[h.s]);board.localToWorld(wp.set(h.x,h.h+.2,h.z));burst(wp,'#ffffff',14*combo,4+combo,1.7);buzz('win')}
+  if(placed<L.need&&!balls.some(q=>!q.pole&&!q.off&&(!q.hole||q.wrong)))fail('Hit the gold x2 bumper before the last ball goes home.');
   ripple(h.x,h.h,h.z,1.5,TINT[h.s]);board.localToWorld(wp.set(h.x,h.h+.1,h.z));burst(wp,TINT[h.s],22,3.2,1.5);
   sfx('drop');buzz('drop');
-  if(placed===balls.length)win();
+  if(placed===L.need)win();
 }
+let combo=0,lastCap=-9;
+function toast(s,c){const t=$('#toast');t.textContent=s;t.style.color=c||'#fff';t.classList.remove('go');void t.offsetWidth;t.classList.add('go')}
+function fail(msg){ // the level starts over on its own
+  if(mode!=='play')return;mode='lost';target.x=target.y=0;drag=null;track('level_fail',{level:L.label,stage:L.stage+1});buzz('drop');
+  const t=$('#hint');t.textContent=msg;t.style.opacity=1;if(bot)return;const r=run;
+  setTimeout(()=>{if(run===r&&mode==='lost')leave(()=>{begin(cur);const h=$('#hint');h.textContent=msg;h.style.opacity=1})},850)}
 function pop(b){
   const h=b.hole,a=Math.random()*6.2832;h.ball=null;h.ring.material.color.copy(h.col);h.ring.material.blending=THREE.AdditiveBlending;h.ring.material.needsUpdate=true;h.ring.scale.setScalar(1);
   b.hole=null;b.wrong=false;b.sink=0;b.cool=.8;b.vx=Math.cos(a)*1.8;b.vz=Math.sin(a)*1.8;b.fallY=.02;b.fvy=4.6;
@@ -652,7 +770,7 @@ function pick(cx,cy){ // the wrongly seated marble under a tap, if any
 // A marble can only go down. It is stranded when, for its size, the marbles at or below some height outnumber the open wells there.
 function stranded(){
   for(let s=0;s<SZ.length;s++){
-    const bh=balls.filter(b=>(!b.hole||b.wrong)&&b.s===s).map(b=>b.h), wh=holes.filter(h=>(!h.ball||h.ball.wrong)&&h.s===s).map(h=>h.h);
+    const bh=balls.filter(b=>(!b.hole||b.wrong)&&b.s===s&&!b.pole).map(b=>b.h), wh=holes.filter(h=>(!h.ball||h.ball.wrong)&&h.s===s).map(h=>h.h);
     for(const t of new Set(bh))if(bh.filter(v=>v<=t+.01).length>wh.filter(v=>v<=t+.01).length)return true;
   }
   return false;
@@ -660,7 +778,7 @@ function stranded(){
 function step(dt){
   const k=150,c=21;tilt.vx+=((target.x-tilt.x)*k-tilt.vx*c)*dt;tilt.vy+=((target.y-tilt.y)*k-tilt.vy*c)*dt;tilt.x+=tilt.vx*dt;tilt.y+=tilt.vy*dt;
   if(mode!=='play'&&mode!=='won'&&mode!=='lost')return;
-  const ax=G*Math.sin(tilt.x*MAXT), az=G*Math.sin(tilt.y*MAXT), hwB=L.W/2, hdB=L.D/2;
+  const zip=1+Math.min(.35,(L.stage<0?120:L.stage)*.0013), sl=(L.slip?1.55:1)*zip, ax=G*Math.sin(tilt.x*MAXT)*sl, az=G*Math.sin(tilt.y*MAXT)*sl, hwB=L.W/2, hdB=L.D/2;
   if(started&&mode==='play')time+=dt;clock+=dt;
   for(const m of movers){const a=(clock/m.T+m.ph)*6.2832,u=.5-.5*Math.cos(a),du=.5*Math.sin(a)*6.2832/m.T,r=m.r;
     m.cx=m.x+m.dx*u;m.cz=m.z+m.dz*u;r.x0=m.cx-m.w/2;r.x1=m.cx+m.w/2;r.z0=m.cz-m.d/2;r.z1=m.cz+m.d/2;r.vx=m.dx*du;r.vz=m.dz*du}
@@ -672,16 +790,20 @@ function step(dt){
   for(const g of gates)g.open+=(g.want-g.open)*Math.min(1,dt*9);
   for(const b of balls){
     b.px=b.x;b.pz=b.z;
+    if(b.off){b.offV-=26*dt;b.offY+=b.offV*dt;b.x+=b.vx*dt;b.z+=b.vz*dt;continue}
     if(b.hole){const h=b.hole;b.sink=Math.min(1,b.sink+dt*5);b.x+=(h.x-b.x)*Math.min(1,dt*22);b.z+=(h.z-b.z)*Math.min(1,dt*22);b.vx=b.vz=0;continue}
     if(b.fallY>0||b.fvy){b.fvy-=26*dt;b.fallY+=b.fvy*dt;if(b.fallY<=0){b.fallY=0;if(b.fvy<-2.5){hit(-b.fvy*.6);b.fvy*=-.28}else b.fvy=0}}
     if(b.hop>0)b.hop=Math.max(0,b.hop-dt*.9);
-    const damp=Math.exp(-(b.stone?1.3:.16*(1-.6*wild))*dt), e=b.stone?.2:.6+.25*wild;
+    const damp=Math.exp(-(b.stone?1.3:L.open?1.5:.16*(1-.6*wild)*(L.slip?.3:1))*dt), e=b.stone?.2:.6+.25*wild;
     let mx=0,mz=0;for(const m of b.mag){const dx=b.x-m[0],dz=b.z-m[1],d=Math.hypot(dx,dz);if(d<MAGR&&d>.01){const f=m[2]*(1-d/MAGR)*(1-d/MAGR)/d;mx+=dx*f;mz+=dz*f}}
-    {const w=.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w+mz)*dt)*damp}
-    {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild))*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
+    if(!b.pole)for(const q of balls){if(!q.pole||q.off||q.h!==b.h)continue;const dx=q.x-b.x,dz=q.z-b.z,d=Math.hypot(dx,dz);if(d<POLE_R&&d>.01){const f=POLE_F*q.pole*(1-d/POLE_R)*(1-d/POLE_R)/d;mx+=dx*f;mz+=dz*f}}
+    if(b.h===0&&b.fallY<.05)for(const t of belts)if(inRect(t,b.x,b.z)){const u=2.2*(t.sp-(b.vx*t.dx+b.vz*t.dz));mx+=t.dx*u;mz+=t.dz*u}
+    {const w=L.open?0:.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph);b.vx=(b.vx+(ax*b.ka-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*b.ka+ax*w+mz)*dt)*damp}
+    {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild)*(L.slip?.15:1)/zip)*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
     if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax+mx,az+mz)<(b.stone?.9:.35)){b.vx=b.vz=0}
     b.x+=b.vx*dt;b.z+=b.vz*dt;
-    if(L.edges){for(const E of L.edges){const d=(b.x-E[0])*E[2]+(b.z-E[1])*E[3];if(d<b.r){b.x+=E[2]*(b.r-d);b.z+=E[3]*(b.r-d);const vn=b.vx*E[2]+b.vz*E[3];if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*E[2];b.vz-=(1+e)*vn*E[3]}}}}else{
+    if(L.open){if(b.fallY<.05&&(L.edges?!inPoly(L.edges,b.x,b.z,0):Math.abs(b.x)>hwB||Math.abs(b.z)>hdB)){b.off=1;b.offV=0;sfx('fall');if(!b.pole)fail('A ball rolled off the edge. Keep them all on the table.');continue}}
+    else if(L.edges){for(const E of L.edges){const d=(b.x-E[0])*E[2]+(b.z-E[1])*E[3];if(d<b.r){b.x+=E[2]*(b.r-d);b.z+=E[3]*(b.r-d);const vn=b.vx*E[2]+b.vz*E[3];if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*E[2];b.vz-=(1+e)*vn*E[3]}}}}else{
     const hw=hwB-b.r,hd=hdB-b.r;
     if(b.x<-hw){b.x=-hw;if(b.vx<0){hit(-b.vx,b);b.vx*=-e}}else if(b.x>hw){b.x=hw;if(b.vx>0){hit(b.vx,b);b.vx*=-e}}
     if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}}
@@ -693,12 +815,17 @@ function step(dt){
       if(r.gate&&r.gate.open>.5)continue;
       const qx=clamp(b.x,r.x0,r.x1),qz=clamp(b.z,r.z0,r.z1);let dx=b.x-qx,dz=b.z-qz,d2=dx*dx+dz*dz;
       if(d2>=b.r*b.r)continue;
+      if(r.hot&&!b.pole&&mode==='play'){board.localToWorld(wp.set(b.x,b.h+b.r,b.z));burst(wp,'#ff5a2a',44,6.5,1.4);ripple(b.x,0,b.z,2.4,'#ff3a1a');sfx('knock');b.off=1;b.offY=-60;b.vx=b.vz=0;fail('Boom. Keep every ball off the red walls.');break}
       if(d2<1e-9){const l=b.x-r.x0,rr=r.x1-b.x,t=b.z-r.z0,bb=r.z1-b.z,m=Math.min(l,rr,t,bb);
         if(m===l){b.x=r.x0-b.r;b.vx=-Math.abs(b.vx)*e}else if(m===rr){b.x=r.x1+b.r;b.vx=Math.abs(b.vx)*e}else if(m===t){b.z=r.z0-b.r;b.vz=-Math.abs(b.vz)*e}else{b.z=r.z1+b.r;b.vz=Math.abs(b.vz)*e}
         continue}
       const d=Math.sqrt(d2),nx=dx/d,nz=dz/d,vn=(b.vx-(r.vx||0))*nx+(b.vz-(r.vz||0))*nz;
       b.x=qx+nx*b.r;b.z=qz+nz*b.r;if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz}
     }
+    if(b.h===0&&!b.off)for(const u of bumps){const dx=b.x-u.x,dz=b.z-u.z,d=Math.hypot(dx,dz),rr=b.r+u.r;if(d>=rr||d<1e-6)continue;const nx=dx/d,nz=dz/d,vn=b.vx*nx+b.vz*nz;
+      b.x=u.x+nx*rr;b.z=u.z+nz*rr;if(vn>=0)continue;const out=Math.max(4.6,-vn*1.15);b.vx+=(out-vn)*nx;b.vz+=(out-vn)*nz;u.flash=1;hit(6,b); // a spring: it always throws the ball back
+      if(u.split&&!u.used&&!b.pole&&mode==='play'){u.used=1;const tx=-nz,tz=nx,c=addBall(b.x+tx*(b.r*2+.03),b.z+tz*(b.r*2+.03),b.s,b.stone?'s':null,.7+Math.random()*.6,0);
+        c.vx=b.vx+tx*2;c.vz=b.vz+tz*2;b.vx-=tx*2;b.vz-=tz*2;c.warp=1;board.localToWorld(wp.set(u.x,.4,u.z));burst(wp,'#ffd23a',36,5,1.6);ripple(u.x,0,u.z,2,'#ffd23a');sfx('star');buzz('drop');updateHUD(true)}}
   }
   for(let i=0;i<balls.length;i++){const a=balls[i];if(a.hole||a.fallY>.2)continue;
     for(let j=i+1;j<balls.length;j++){const b=balls[j];if(b.hole||b.h!==a.h||b.fallY>.2)continue;
@@ -713,15 +840,15 @@ function step(dt){
       b.x+=q.x-p.x;b.z+=q.z-p.z;b.px=b.x;b.pz=b.z;b.h=q.h;b.deck=q.deck;b.pad=q;if(b.over)b.over.dwell=0;b.over=null;b.dv=0;b.warp=1;p.flash=q.flash=1;
       board.localToWorld(wp.set(q.x,q.h+.2,q.z));burst(wp,p.tint,22,3.4,1.8);ripple(q.x,q.h,q.z,1.6,p.tint);sfx('whoosh');buzz('drop');break}
   }
-  if(wild)for(const b of balls){if(b.hole||b.fallY>.05)continue; // boss boards: every open well has a raised lip that nudges marbles away
-    for(const h of holes){if(h.ball||h.h!==b.h)continue;const dx=b.x-h.x,dz=b.z-h.z,d=Math.hypot(dx,dz);
-      if(d>h.R*.75&&d<h.R+.55){const f=2.6*wild*(1-(d-h.R*.75)/(h.R*.25+.55))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}}}
-  // a marble rolls straight over a well and only settles in when it comes to rest on one it fits
-  for(const b of balls){if(b.hole)continue;let on=null;
+  // pockets: slow and close and the well draws the ball in; fast and it skips across
+  for(const b of balls){if(b.hole||b.pole||b.off)continue;let on=null;
     if(b.cool>0)b.cool-=dt;
-    else if(b.fallY<.05)for(const h of holes){if(h.h!==b.h||h.ball||h.s<b.s)continue; // a marble fits its own well, or any bigger one
-      if(Math.hypot(h.x-b.x,h.z-b.z)<(h.s===b.s?b.r*SEAT_D:h.R-b.r*.6)&&Math.hypot(b.vx,b.vz)<SEAT_V){on=h;break}}
-    const seatT=SEAT_T*(1+1.2*wild);if(on){b.over=on;b.dv+=dt;on.dwell=b.dv/seatT;if(b.dv>=seatT)capture(b,on)}
+    else if(b.fallY<.05){const sp=Math.hypot(b.vx,b.vz);
+      for(const h of holes){if(h.h!==b.h||h.ball||h.s<b.s)continue;const dx=h.x-b.x,dz=h.z-b.z,d=Math.hypot(dx,dz);
+        if(h.s===b.s){if(d<h.R+PULL_R&&d>.02&&sp<PULL_V){const f=PULL*(1-d/(h.R+PULL_R))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}
+          if(d<h.R*.8){if(sp<CAP_V){on=h;break}if(!(b.skip>clock)){b.skip=clock+1.2;toast('Too fast!','#ff9d6a');ripple(h.x,h.h,h.z,1.1,'#ff9d6a');buzz('tick')}}}
+        else if(d<h.R-b.r*.6&&sp<SEAT_V){on=h;break}}} // a smaller ball only lodges in a bigger well when it stops there
+    const seatT=on&&on.s===b.s?.03:SEAT_T;if(on){b.over=on;b.dv+=dt;on.dwell=b.dv/seatT;if(b.dv>=seatT)capture(b,on)}
     else{if(b.over)b.over.dwell=0;b.over=null;b.dv=0}
   }
 }
@@ -743,13 +870,16 @@ function draw(dt,alpha){
     const x=lerp(b.px,b.x,alpha),z=lerp(b.pz,b.z,alpha);
     const mx=x-b.mesh.position.x,mz=z-b.mesh.position.z,d=Math.hypot(mx,mz);
     if(b.warp){b.warp=0;b.mesh.position.set(x,0,z)}else if(d>1e-5&&d<1){axis.set(mz/d,0,-mx/d);dq.setFromAxisAngle(axis,d/b.r);b.q.premultiply(dq)}
-    let yy=b.h+b.r+b.fallY-b.dip-b.bowl+Math.sin(Math.min(1,b.hop/.16)*Math.PI)*.1;
+    let yy=b.h+b.r+b.fallY+b.offY-b.dip-b.bowl+Math.sin(Math.min(1,b.hop/.16)*Math.PI)*.1;
     if(b.drop>0){b.drop-=dt;const t=clamp(1-b.drop/.45,0,1);yy+=(1-t)*(1-t)*7;b.mesh.visible=b.drop<.45}
-    if(b.hole){yy=lerp(b.h+b.r,b.wrong?b.h-WELL+b.r+.01:b.h-b.r*.42,easeBack(b.sink));b.mat.emissiveIntensity=b.wrong?0:.07*b.sink+.03*Math.sin(now/420+b.x)}else b.mat.emissiveIntensity=0;
+    if(b.hole){yy=lerp(b.h+b.r,b.wrong?b.h-WELL+b.r+.01:b.h-b.r*.42,easeBack(b.sink));b.mat.emissiveIntensity=b.wrong?0:.07*b.sink+.03*Math.sin(now/420+b.x)}else b.mat.emissiveIntensity=b.pole?.7+.3*Math.sin(now/300+b.ph):0;
     b.mesh.position.set(x,yy,z);b.mesh.quaternion.copy(b.q);
   }
   for(const h of holes){h.lit=lerp(h.lit,h.ball?1:Math.min(.7,h.dwell||0),Math.min(1,dt*8));h.ring.material.opacity=h.ball&&h.ball.wrong?.8+.2*Math.sin(now/130):.38+.62*h.lit+(h.ball?0:.12*Math.sin(now/500+h.x*2));h.glow.material.opacity=.1+.25*h.lit}
   for(const g of gates)g.mesh.position.y=WALLH/2-g.open*(WALLH+.03);
+  for(const u of bumps){u.flash=Math.max(0,u.flash-dt*4);u.mesh.scale.set(1+.2*u.flash,1,1+.2*u.flash);u.mat.emissiveIntensity=(u.split&&u.used?.08:.5+.2*Math.sin(now/350+u.x))+u.flash*1.6;if(u.cap)u.cap.visible=!u.used}
+  for(const m of hots)m.emissiveIntensity=.75+.45*Math.sin(now/160);
+  for(const t of belts)t.tex.offset.y-=t.sp*dt/.6;
   for(const m of movers)m.mesh.position.set(m.cx,WALLH*.575,m.cz);
   for(const p of plates)p.disc.material.opacity=p.on||p.g.latched?.95:.3+.12*Math.sin(now/300+p.x);
   for(const p of pads){p.flash=Math.max(0,p.flash-dt*2.5);const w=.5+.5*Math.sin(now/260+p.x);p.ring.material.opacity=.42+.12*w;p.disc.material.opacity=.06+.04*w+.5*p.flash;p.beam.material.opacity=.018+.012*w+.3*p.flash;p.beam.scale.y=.55+p.flash*1.6;p.disc.rotation.y+=dt}
@@ -761,7 +891,7 @@ function draw(dt,alpha){
   const lift=dist*.085;camera.position.set(camX,Math.sin(el)*dist,Math.cos(el)*dist+lift+camZ);ctr.set(camX*.25,.1,lift);camera.lookAt(ctr);
   renderer.render(scene,camera);
 }
-function updateHUD(pop){const c=$('#count');c.textContent=placed+'/'+balls.length;if(pop){c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop')}}
+function updateHUD(pop){const c=$('#count');c.textContent=placed+'/'+L.need;if(pop){c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop')}}
 
 // ---------- input: hold and drag to tilt; let go and the board springs level ----------
 const REACH=85;let drag=null;const keys={};
@@ -800,13 +930,13 @@ function pause(){if(mode!=='play')return;mode='paused';drag=null;target.x=target
 function resume(){hideCards();mode='play'}
 function win(){
   mode='won';celebrate=1.6;target.x=target.y=0;drag=null;
-  const t=Math.round(time*10)/10,prev=L.daily?null:save.best[cur],best=!L.daily&&(prev==null||t<prev);if(best){save.best[cur]=t;persist()}
+  const t=Math.round(time*10)/10,prev=L.daily?null:save.best[cur],best=!bot&&!L.daily&&(prev==null||t<prev);if(best){save.best[cur]=t;persist()}
   if(L.daily&&save.dailyDay!==L.daily){save.streak=save.dailyDay===yesterday()?(save.streak||0)+1:1;save.dailyDay=L.daily;persist();track('daily_complete',{streak:save.streak})}
   sfx('win');buzz('win');const r=run;track('level_complete',{level:L.label,stage:L.stage+1,seconds:t,highest:nextStage()+1});
   holes.forEach((h,k)=>setTimeout(()=>{if(run!==r)return;board.localToWorld(wp.set(h.x,h.h+.2,h.z));burst(wp,TINT[h.s],30,5.5,1.8);ripple(h.x,h.h,h.z,2.6,TINT[h.s])},90*k));
   setTimeout(()=>{if(run===r){wp.set(0,.5,0);burst(wp,'#ffffff',90,8,1.4)}},90*holes.length+80);
   cls('#hud',true);cls('#foot',true);
-  const n=0;
+  const n=L.daily?3:starsFor(cur,t);
   setTimeout(()=>{if(run!==r||mode!=='won')return;
     $('#wname').textContent='Level '+L.label+' · '+L.name;$('#wtime').textContent=t.toFixed(1)+'s';
     $('#wbest').textContent=best&&prev!=null?'New best — was '+prev.toFixed(1)+'s':n<3?'Three stars under '+L.par[0]+'s':prev!=null&&!best?'Best '+prev.toFixed(1)+'s':'A perfect run';
@@ -833,9 +963,9 @@ function renderHome(){
   const X=k=>Math.sin(k*.8)*94, Y=k=>HT-PB-k*STEP;
   let way='',walked='';for(let t=0;t<=(N-1)*5;t++){const k=t/5,q=(t?'L':'M')+(150+X(k)).toFixed(1)+' '+Y(k).toFixed(1);way+=q;if(k<=nk)walked+=q}
   let h='<div id="trail" style="height:'+HT+'px">';
-  CHAPTERS.forEach((w,c)=>{h+='<div class="band" style="top:'+(Y(c*10+9)-STEP/2)+'px;height:'+STEP*10+'px;--c1:'+w.card[0]+';--c2:'+w.card[1]+'"></div>'});
+  CHAPTERS.forEach((w,c)=>{h+='<div class="band" style="top:'+(Y(c*CH+CH-1)-STEP/2)+'px;height:'+STEP*CH+'px;--c1:'+w.card[0]+';--c2:'+w.card[1]+'"></div>'});
   h+='<svg width="300" height="'+HT+'" viewBox="0 0 300 '+HT+'" aria-hidden="true"><path class="way" d="'+way+'"/><path class="walked" d="'+walked+'"/></svg>';
-  CHAPTERS.forEach((w,c)=>{h+='<div class="chap" style="top:'+(Y(c*10)+STEP/2)+'px">'+w.name+'</div>'});
+  CHAPTERS.forEach((w,c)=>{h+='<div class="chap" style="top:'+(Y(c*CH)+STEP/2)+'px">'+w.name+'</div>'});
   STAGES.forEach((st,k)=>{const i=st[0],Lv=LEVELS[i],op=unlocked(i),done=save.best[i]!=null,isCur=k===nk&&!done;
     h+='<button class="node'+(Lv.boss?' boss':Lv.f?' hard':'')+(op?'':' lock')+(done?' done':'')+(isCur?' cur':'')+'" style="left:calc(50% + '+X(k).toFixed(1)+'px);top:'+Y(k)+'px"'+(op?' data-i="'+i+'"':' disabled')
       +' aria-label="'+(Lv.boss?'Boss level ':Lv.f?'Hard level ':'Level ')+Lv.label+' '+Lv.name+(op?done?' (cleared)':'':' (locked)')+'">'+(op?Lv.label:LOCK)+(Lv.boss?'<small>BOSS</small>':Lv.f?'<small>HARD</small>':'')+(done?'<i>✓</i>':'')+'</button>'});
@@ -880,8 +1010,48 @@ function frame(now){
   if(L)draw(dt,acc/H);
 }
 window.__mh={
-  print(n){let h=2166136261;const s=JSON.stringify(LEVELS.slice(0,n||FROZEN[0]).map(l=>[l.W,l.D,l.shape,l.balls,l.holes,l.walls,l.decks,l.portals,l.gates,l.plates,l.movers,l.f,l.boss]));for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)},
+  print(n){let h=2166136261;const s=JSON.stringify(LEVELS.slice(0,n||FROZEN[0]).map(l=>[l.W,l.D,l.shape,l.balls,l.holes,l.walls,l.decks,l.portals,l.gates,l.plates,l.movers,l.f,l.boss,l.bump,l.split,l.belts,l.hot,l.poles,l.slip,l.open]));for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)},
   frozenOK(){return this.print(FROZEN[0])===FROZEN[1]},
+  meta(){return STAGES.map(s=>{const l=LEVELS[s[0]];return[l.theme,(l.mods||[]).join('+'),l.f?1:l.boss?2:0,l.need]})},
+  auto(i,secs){ // a simple test player: walks one ball at a time to a well along a flood-filled path
+    bot=1;begin(i);intro=1;mode='play';started=true;balls.forEach(b=>b.drop=0);
+    const res=.05,W=L.W,D=L.D,nx=Math.ceil(W/res),nz=Math.ceil(D/res),fields=new Map(),N=[[1,0],[-1,0],[0,1],[0,-1]],care=L.open||L.hot.length;
+    const blocked=(x,z,r,h,down)=>{const e=r+(L.open?.45:0);if(L.edges?!inPoly(L.edges,x,z,e):Math.abs(x)>W/2-e||Math.abs(z)>D/2-e)return true;
+      for(const q of rects){if(q.gate||q.vx!==undefined)continue;if(q.deck){if(down||h>=q.deck.top-.01)continue}else if(q.h!==h)continue;const qx=clamp(x,q.x0,q.x1),qz=clamp(z,q.z0,q.z1);if(Math.hypot(x-qx,z-qz)<r+(q.hot?.35:0))return true}
+      for(const u of bumps)if(!(u.split&&!u.used)&&Math.hypot(x-u.x,z-u.z)<u.r+r)return true;return false};
+    const ci=(x,z)=>[clamp(Math.floor((x+W/2)/res),0,nx-1),clamp(Math.floor((z+D/2)/res),0,nz-1)],cx=a=>-W/2+(a+.5)*res,cz=b=>-D/2+(b+.5)*res;
+    const padAt=(x,z)=>pads.find(p=>Math.hypot(x-p.x,z-p.z)<PR-.06);
+    const field=(gx,gz,r,h,down,key)=>{if(fields.has(key))return fields.get(key);const f=new Float32Array(nx*nz).fill(1e9),q=ci(gx,gz);f[q[1]*nx+q[0]]=0;
+      for(let k=0;k<q.length;k+=2){const a=q[k],b=q[k+1],d=f[b*nx+a]+1,nb=N.map(([da,db])=>[a+da,b+db]),p=padAt(cx(a),cz(b));if(p)nb.push(ci(p.twin.x,p.twin.z));
+        for(const [A,B] of nb){if(A<0||B<0||A>=nx||B>=nz||f[B*nx+A]<=d)continue;if(blocked(cx(A),cz(B),r,h,down))continue;f[B*nx+A]=d;q.push(A,B)}}
+      fields.set(key,f);return f};
+    const max=(secs||90)/H;let out={ok:0,why:'time'},lx=0,lz=0,still=0,jig=0,jx=0,jz=0;
+    for(let n=0;n<max;n++){
+      if(mode==='won'){out={ok:1,t:+(n*H).toFixed(1)};break}if(mode==='lost'){out={ok:0,why:'lost',t:+(n*H).toFixed(1)};break}
+      if(n%12===0){const w=balls.find(b=>b.wrong);if(w)pop(w);
+        const sp=bumps.find(u=>u.split&&!u.used),free=balls.filter(b=>!b.hole&&!b.pole&&!b.off),near=b=>Math.min(...holes.filter(h=>!h.ball&&h.s===b.s).map(h=>Math.hypot(h.x-b.x,h.z-b.z)),99),b=care?free.sort((p,q)=>near(p)-near(q))[0]:free[0];target.x=target.y=0;
+        if(b){let g=null,f=null;let [a,c]=ci(b.x,b.z);const rr=b.r+.03,ub=bumps.filter(u=>u.used).length;
+          if(Math.hypot(b.x-lx,b.z-lz)>.12){lx=b.x;lz=b.z;still=0}else if(++still>30){still=0;jig=8;const an=Math.random()*6.28;jx=Math.cos(an);jz=Math.sin(an)}
+          if(sp){g=[sp.x,sp.z];f=field(sp.x,sp.z,rr,0,0,'s'+sp.x+b.s+ub)}
+          else for(const down of [0,1]){if(g)break;let best=1e9;for(const h of holes){if(h.ball||h.s!==b.s||(down?h.h>=b.h:h.h!==b.h))continue;const ff=field(h.x,h.z,rr,h.h,down,[h.x,h.z,b.s,ub,down]+''),v=ff[c*nx+a];if(v<=best){best=v;g=[h.x,h.z];f=ff}}}
+          if(jig>0){jig--;target.x=jx;target.y=jz}
+          else if(g){let tx=g[0],tz=g[1];const dg=Math.hypot(g[0]-b.x,g[1]-b.z);
+            if(f[c*nx+a]>=1e8){let bd=1e9;for(let P=a-8;P<=a+8;P++)for(let Q=c-8;Q<=c+8;Q++){if(P<0||Q<0||P>=nx||Q>=nz||f[Q*nx+P]>=1e8)continue;const dd=Math.hypot(P-a,Q-c);if(dd<bd){bd=dd;tx=cx(P);tz=cz(Q)}}} // pressed against a wall: step back onto the path first
+            else if(dg>.45){let bv=f[c*nx+a],A=a,B=c;for(let s=0;s<8;s++){let m=null;const nb=N.map(([da,db])=>[A+da,B+db]),p=padAt(cx(A),cz(B));if(p)nb.push(ci(p.twin.x,p.twin.z));
+                for(const [P,Q] of nb){if(P<0||Q<0||P>=nx||Q>=nz)continue;if(f[Q*nx+P]<bv){bv=f[Q*nx+P];m=[P,Q]}}if(!m)break;
+                if(Math.abs(m[0]-A)+Math.abs(m[1]-B)>1){const p2=padAt(cx(A),cz(B));m=null;tx=p2.x;tz=p2.z;A=-1;break}A=m[0];B=m[1]}
+              if(A>=0){tx=cx(A);tz=cz(B)}}
+            const dx=tx-b.x,dz=tz-b.z,d=Math.hypot(dx,dz)||1,v=dg<.9||care?1.3:2.3;target.x=clamp((dx/d*v-b.vx)*.55,-1,1);target.y=clamp((dz/d*v-b.vz)*.55,-1,1)}
+          if(care){ // look half a second ahead for every ball, and refuse a tilt that sends one into a red wall or off the table
+            const sl=L.slip?1.55:1,T=.45,safe=(tx,ty)=>{const ax=G*Math.sin(tx*MAXT)*sl,az=G*Math.sin(ty*MAXT)*sl;
+              for(const q of balls){if(q.hole||q.off||q.pole)continue;for(const k of [.5,1]){const t=T*k,x=q.x+q.vx*t+.5*ax*q.ka*t*t,z=q.z+q.vz*t+.5*az*q.ka*t*t;
+                if(L.open&&(L.edges?!inPoly(L.edges,x,z,.12):Math.abs(x)>W/2-.12||Math.abs(z)>D/2-.12))return false;
+                for(const r of rects)if(r.hot){const qx=clamp(x,r.x0,r.x1),qz=clamp(z,r.z0,r.z1);if(Math.hypot(x-qx,z-qz)<q.r+.14)return false}}}return true};
+            const wx=target.x,wy=target.y;let done=0;for(const k of [1,.6,.3]){if(safe(wx*k,wy*k)){target.x=wx*k;target.y=wy*k;done=1;break}}
+            if(!done){let best=-1e9;target.x=target.y=0;for(let d8=0;d8<8;d8++){const ux=Math.cos(d8*.7854),uy=Math.sin(d8*.7854);for(const k of [1,.5]){if(!safe(ux*k,uy*k))continue;const sc=ux*wx+uy*wy+(k<1?.01:0);if(sc>best){best=sc;target.x=ux*k;target.y=uy*k}}}
+              if(best===-1e9&&!safe(0,0)){const q=free.slice().sort((p,r)=>Math.hypot(r.vx,r.vz)-Math.hypot(p.vx,p.vz))[0],sp2=Math.hypot(q.vx,q.vz)||1;target.x=-q.vx/sp2;target.y=-q.vz/sp2}}}}}
+      step(H)}
+    out.placed=placed;out.need=L.need;bot=0;return out},
   nativeTilt(){}, // phone-tilt control is switched off
   shot(i,secs){begin(i);intro=1;mode='play';balls.forEach(b=>b.drop=0);$('#splash').classList.remove('go');$('#hint').style.opacity=0;started=true;const t=[.5,.35];target.x=t[0];target.y=t[1];for(let k=0;k<(secs||1)*240;k++)step(H);tilt.x=t[0]*.5;tilt.y=t[1]*.5}, // store screenshots: jump to a board mid-play
   back(){ // returns true when the page handled the back press
