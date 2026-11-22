@@ -292,6 +292,8 @@ const SHAPES={
 function edgesOf(P){let A=0;P.forEach((p,i)=>{const q=P[(i+1)%P.length];A+=p[0]*q[1]-q[0]*p[1]});const sg=A>0?1:-1;
   return P.map((p,i)=>{const q=P[(i+1)%P.length],dx=q[0]-p[0],dz=q[1]-p[1],l=Math.hypot(dx,dz);return[p[0],p[1],-dz/l*sg,dx/l*sg]})}
 const inPoly=(E,x,z,m)=>E.every(e=>(x-e[0])*e[2]+(z-e[1])*e[3]>=m);
+const inVoid=(V,x,z)=>{let c=false;for(let i=0,j=V.length-1;i<V.length;j=i++){const a=V[i],b=V[j];if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])c=!c}return c}; // is this point over a missing piece of floor?
+const nearVoid=(vs,x,z,r)=>vs.some(V=>inVoid(V,x,z)||[0,1,2,3,4,5,6,7].some(k=>inVoid(V,x+Math.cos(k*.7854)*r,z+Math.sin(k*.7854)*r)));
 const grow=(P,E,d)=>P.map((p,i)=>{const a=E[(i+P.length-1)%P.length],b=E[i],k=d/(1+a[2]*b[2]+a[3]*b[3]);return[p[0]-(a[2]+b[2])*k,p[1]-(a[3]+b[3])*k]});
 function buildMaze(L){
   const [C,Rw,seed,sc=1]=L.maze, rnd=rng(seed), id=(c,r)=>r*C+c;
@@ -324,13 +326,13 @@ function buildMaze(L){
 // Never change genLevel or the chapter loop in a way that alters levels already released: __mh.print(n) returns a
 // fingerprint of the first n levels, and FROZEN below is the released value to compare against before shipping.
 const TOTAL_STAGES=300;
-const FROZEN=[300,'1e668b03'];
+const FROZEN=[300,'f067394'];
 const NA=['Quiet','Silver','Hidden','Low','High','Still','Far','Hollow','Bright','Soft','Narrow','Broken','Twin','Lost','Slow','Amber','Pale','Deep','Old','Thin'];
 const NB=['Harbor','Step','Crossing','Basin','Reach','Drift','Turn','Run','Pocket','Lane','Shelf','Cut','Bend','Rise','Fold','Yard','Gap','Watch','Spur','Rest'];
 const ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X'];
-const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Block grid','Three floors','Odd table','The swarm','Ring maze','The loop'];
-const PAL_OF=[0,1,2,3,4,5,1,2,6,3,5,4]; // which palette each board type wears
-const FIRST_TIP={8:'A new table shape. The rails are angled, so marbles bank off them.',5:'A maze. The wells hide in dead ends, and a wrong turn means rolling all the way back.',6:'A grid of blocks. Thread the balls down the lanes and round the bricks.',7:'Three floors. Marbles only go down, so fill the top wells first.',9:'A crowd of balls on a big table, and it keeps growing. Do not chase them one by one: sweep them gently and the wells do the rest.',10:'A ring maze. Each ring has one doorway; work inward to the heart.',11:'One corridor, all the way round. Pick the short way.'};
+const HARDTAG=['More marbles','Tighter walls','Crowded ledge','More rooms','Faster walls','Bigger maze','Block grid','Three floors','Odd table','The swarm','Ring maze','The loop','Trapdoors','Rod ring','Air lifts','Broken floor','Pedestals'];
+const PAL_OF=[0,1,2,3,4,5,1,2,6,3,5,4,2,6,3,2,0]; // which palette each board type wears
+const FIRST_TIP={8:'A new table shape. The rails are angled, so marbles bank off them.',5:'A maze. The wells hide in dead ends, and a wrong turn means rolling all the way back.',6:'A grid of blocks. Thread the balls down the lanes and round the bricks.',7:'Floors stepping down. Balls only go down, so fill the top wells first.',2:'A ball that rolls off the ledge cannot climb back. Fill the upper wells first.',3:'The rooms are sealed. Roll onto a neon door to come out of its twin.',4:'Some walls slide, and a ball resting on a glowing plate holds its gate open. Time your run.',12:'Two floors, one hanging in the air. Roll a ball into a trapdoor and it drops to the floor far below. There is no way back up.',15:'Parts of this floor are missing. A ball that rolls into a gap is gone, and the level starts over.',16:'Some wells stand on platforms in the air. Roll a ball onto a vent and it is lifted to the platform ringed in the same colour.',14:'The wells are on the floor above. Roll a ball onto a vent and the air lifts it up; the trapdoor up there leads back down.',13:'A round table fenced by rods. Mind the gaps: a ball that slips through is gone, and the level starts over.',9:'A crowd of balls on a big table, and it keeps growing. Do not chase them one by one: sweep them gently and the wells do the rest.',10:'A ring maze. Each ring has one doorway; work inward to the heart.',11:'One corridor, all the way round. Pick the short way.'};
 function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per radius inside reg=[x0,x1,z0,z1], clear of circles and rects in `taken`
   const out=[];
   for(const r of rad){let ok=false;
@@ -340,18 +342,18 @@ function scatter(rnd,rad,reg,taken,gap){ // rejection sampling: one point per ra
     if(!ok)return null}
   return out;
 }
-function connected(W,D,walls,pts,r=.46,E){ // can a marble of radius r roll between every listed point?
+function connected(W,D,walls,pts,r=.46,E,bad){ // can a marble of radius r roll between every listed point?
   const res=.1,nx=Math.round(W/res),nz=Math.round(D/res),seen=new Uint8Array(nx*nz);
-  const free=(a,b)=>{const x=-W/2+(a+.5)*res,z=-D/2+(b+.5)*res;if(Math.abs(x)>W/2-r||Math.abs(z)>D/2-r||(E&&!inPoly(E,x,z,r)))return false;
+  const free=(a,b)=>{const x=-W/2+(a+.5)*res,z=-D/2+(b+.5)*res;if(Math.abs(x)>W/2-r||Math.abs(z)>D/2-r||(E&&!inPoly(E,x,z,r))||(bad&&bad(x,z,r)))return false;
     return walls.every(w=>{const qx=clamp(x,w[0]-w[2]/2,w[0]+w[2]/2),qz=clamp(z,w[1]-w[3]/2,w[1]+w[3]/2);return Math.hypot(x-qx,z-qz)>r})};
   const cell=p=>[clamp(Math.floor((p[0]+W/2)/res),0,nx-1),clamp(Math.floor((p[1]+D/2)/res),0,nz-1)];
   const q=[cell(pts[0])];seen[q[0][1]*nx+q[0][0]]=1;
   for(let i=0;i<q.length;i++){const [a,b]=q[i];for(const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const A=a+da,B=b+db;if(A<0||B<0||A>=nx||B>=nz||seen[B*nx+A]||!free(A,B))continue;seen[B*nx+A]=1;q.push([A,B])}}
   return pts.every(p=>{const [a,b]=cell(p);for(let da=-1;da<=1;da++)for(let db=-1;db<=1;db++){const A=a+da,B=b+db;if(A>=0&&B>=0&&A<nx&&B<nz&&seen[B*nx+A])return true}return false});
 }
-function genLevel(theme,diff,seed,hard,cap){
+function genLevel(theme,diff,seed,hard,cap,lo){
   const rnd=rng(seed),W=6.4,D=8,hw=W/2,hd=D/2,pick=a=>a[rnd()*a.length|0];
-  let n=clamp(3+(diff/2.4|0)+(hard?2:0),3,cap||11);
+  let n=clamp(3+(diff/2.4|0)+(hard?2:0),lo||3,Math.max(cap||11,lo||3));
   const kinds=diff<3?[1]:diff<6?[1,2]:diff<10?[0,1,2]:[0,1,2,3];
   const sizes=k=>Array.from({length:k},()=>pick(kinds)), rw=sz=>sz.map(x=>RW[x]), rb=sz=>sz.map(x=>SZ[x]);
   const mk=(sz,bp,hp,extra)=>Object.assign({W,D,balls:bp.map((p,k)=>[p[0],p[1],sz[k]]),holes:hp.map((p,k)=>[p[0],p[1],sz[k]])},extra);
@@ -368,7 +370,7 @@ function genLevel(theme,diff,seed,hard,cap){
     const sz=sizes(n),kTop=1+(rnd()*(n-2)|0),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}));
     const top=scatter(rnd,rw(sz.slice(0,kTop)),[-hw,hw,-hd+1.15,edge-.3],t,.25),low=top&&scatter(rnd,rw(sz.slice(kTop)),[-hw,hw,edge+.4,hd],t,.3);
     if(!low)return null;const bp=row(n,-hd+.55,.86);return mk(sz,bp,[...top,...low],{walls,decks:[[0,-hd+dd/2,W,dd,.55]]})}
-  if(theme===3){const four=diff>4&&rnd()<.6||hard;n=Math.min(n,four?6:7);const sz=sizes(n);
+  if(theme===3){const four=diff>1||hard;n=Math.min(n,four?6:7);const sz=sizes(n);
     const walls=four?[[0,0,W,WT],[0,0,WT,D]]:[[0,0,W,WT]],portals=four?[[-2.4,-.8,2.5,-3.3],[.8,-.8,2.5,3.3],[.8,.8,-2.5,3.3]]:[[pick([-2.4,2.4]),-1.1,pick([-2.4,2.4]),1.1]];
     const rooms=four?[[-hw,-.1,-hd,-.1],[.1,hw,-hd,-.1],[.1,hw,.1,hd],[-hw,-.1,.1,hd]]:[[-hw,hw,-hd,-.1],[-hw,hw,.1,hd]];
     const t=[...walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]})),...portals.flatMap(p=>[{x:p[0],z:p[1],r:PR+.1},{x:p[2],z:p[3],r:PR+.1}])],hp=[];
@@ -397,12 +399,58 @@ function genLevel(theme,diff,seed,hard,cap){
     const bricks=rest.slice(n).concat(free.filter(q=>q[1]===2)),nbk=Math.min(bricks.length,Math.round(free.length*Math.min(.28,.12+diff*.014)));
     bricks.slice(0,nbk).forEach(q=>walls.push([...P(q[0],q[1]),.84,.84]));
     if(!connected(Wg,Dg,walls,[...bp,...hp],.36))return null;return{W:Wg,D:Dg,walls,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
-  if(theme===7){ // tower: three floors stepping down toward you, wells on every floor
-    n=clamp(n,4,7);const sz=sizes(n),fd=D/3,decks=[[0,-hd+fd/2,W,fd,1],[0,-hd+fd*1.5,W,fd,.5]],cnt=[1,1,1],t=[],portals=[];
-    for(let k=3;k<n;k++)cnt[rnd()*3|0]++;
+  if(theme===7){ // tower: floors stepping down toward you, wells on every floor; three floors at first, four later
+    const F=diff>8?4:3;n=clamp(n,F+1,7);const sz=sizes(n),fd=D/F,decks=[],cnt=Array(F).fill(1),t=[],portals=[];
+    for(let f=0;f<F-1;f++)decks.push([0,+(-hd+fd*(f+.5)).toFixed(3),W,fd,+((F-1-f)*(F===4?.4:.5)).toFixed(2)]);
+    for(let k=F;k<n;k++)cnt[rnd()*F|0]++;
     if(diff>6&&rnd()<.5){const p=[pick([-2.5,2.5]),hd-.8,pick([-2.5,2.5]),-hd+fd-.55];portals.push(p);t.push({x:p[0],z:p[1],r:PR+.1},{x:p[2],z:p[3],r:PR+.1})} // a lift back to the top
-    const hp=[];let o=0;for(let f=0;f<3;f++){const q=scatter(rnd,rw(sz.slice(o,o+cnt[f])),[-hw,hw,-hd+fd*f+(f?.4:1.15),-hd+fd*(f+1)-(f<2?.35:0)],t,.25);if(!q)return null;hp.push(...q);o+=cnt[f]}
+    const hp=[];let o=0;for(let f=0;f<F;f++){const q=scatter(rnd,rw(sz.slice(o,o+cnt[f])),[-hw,hw,-hd+fd*f+(f?.4:1.15),-hd+fd*(f+1)-(f<F-1?.35:0)],t,.25);if(!q)return null;hp.push(...q);o+=cnt[f]}
     return mk(sz,row(n,-hd+.55,.86),hp,{decks,portals})}
+  if(theme===12||theme===14){ // floating floors: an upper plate hangs in the air, a lower one sits far below, with nothing between them
+    const Wt=6.4,Dt=10,top=1.6,zu0=-Dt/2,zu1=-1.6,zl0=.6,zl1=Dt/2,walls=[[0,+(zu1-WT/2-.01).toFixed(2),Wt,WT],[0,+(zl0+WT/2).toFixed(2),Wt,WT]],chutes=[];
+    const deck=[[0,(zu0+zu1)/2,Wt,zu1-zu0,top]],voidRect=[0,(zu0+zl0)/2,Wt,zl0-zu0],rc=w=>({x:w[0],z:w[1],w:w[2],d:w[3]});
+    if(theme===12){ // trapdoors: balls start up top and drop through to pens below, where the wells are
+      const K=diff>5||hard?3:2,xs=K===2?[-1.7,1.7]:[-2.2,0,2.2];
+      xs.forEach(x=>chutes.push([x,+(zu1-.95-rnd()*.4).toFixed(2),x,+(zl0+.85).toFixed(2),.5,top,0]));
+      for(let k=1;k<K;k++){const x=(xs[k-1]+xs[k])/2,len=1.5+rnd()*.8;walls.push([x,+(zl0+WT+len/2).toFixed(2),WT,+len.toFixed(2)])} // pens open at the far end, so no ball is ever trapped
+      for(let k=Math.min(3,(diff-2)/3|0),g=0;k>0&&g<40;g++){const x=+lerp(-Wt/2+.8,Wt/2-.8,rnd()).toFixed(2),z=+lerp(zu0+1.5,zu1-1.9,rnd()).toFixed(2);
+        if(walls.some(o=>Math.hypot(x-o[0],z-o[1])<1.5&&o[2]<1))continue;walls.push([x,z,.6,.6]);k--}
+      n=clamp(n,3,7);const sz=sizes(n).map(x=>Math.min(x,2)),t=[...walls.map(rc),...chutes.map(c=>({x:c[2],z:c[3],r:.55}))];
+      const hp=scatter(rnd,rw(sz),[-Wt/2,Wt/2,zl0+.3,zl1],t,.28);if(!hp)return null;
+      if(!connected(Wt,Dt,[...walls.filter(w=>w[1]>zl0),voidRect],[...chutes.map(c=>[c[2],c[3]]),...hp],.4))return null;
+      return{W:Wt,D:Dt,float:[zu1,zl0],walls,chutes,decks:deck,balls:row(n,zu0+.6,.8).map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
+    // air lifts: balls start below; vents blow them up to the plate, and one trapdoor leads back down, so nothing is ever stuck
+    [-1.9,1.9].forEach(x=>chutes.push([x,+(zl0+.95).toFixed(2),x,+(zu1-.9).toFixed(2),.46,0,top]));
+    chutes.push([0,+(zu0+1).toFixed(2),0,+(zl0+2.4).toFixed(2),.5,top,0]);
+    n=clamp(n,4,7);const sz=sizes(n).map(x=>Math.min(x,2)),nu=Math.max(2,Math.round(n*(diff>5?.6:.75))),t=[...walls.map(rc),...chutes.flatMap(c=>[{x:c[0],z:c[1],r:.62},{x:c[2],z:c[3],r:.62}])];
+    const hu=scatter(rnd,rw(sz.slice(0,nu)),[-Wt/2,Wt/2,zu0,zu1-.25],t,.3),hl=hu&&scatter(rnd,rw(sz.slice(nu)),[-Wt/2,Wt/2,zl0+.3,zl1-1.3],t,.3);if(!hl)return null;
+    return{W:Wt,D:Dt,float:[zu1,zl0],walls,chutes,decks:deck,balls:row(n,zl1-.6,.8).map((q,i)=>[q[0],q[1],sz[i]]),holes:[...hu,...hl].map((q,i)=>[q[0],q[1],sz[i]])}}
+  if(theme===15){ // broken floor: pieces of the table are simply missing, and a ball that rolls into a gap is gone
+    const kind=rnd()*3|0,voids=[],rr2=q=>[+q[0].toFixed(2),+q[1].toFixed(2)];let Wv=6.4,Dv=8,shape;
+    if(kind===0){shape='hex';Wv=6.8;Dv=7.6;const P=SHAPES.hex(Wv,Dv),f=.42,o=rnd()*2|0,cnt=diff>4||hard?3:2; // a pinwheel: alternate wedges of a hexagon are gone, the hub joins the rest
+      for(let i=0;i<cnt;i++){const a=P[(o+i*2)%6],b=P[(o+i*2+1)%6];voids.push([[a[0]*f,a[1]*f],[a[0]*.985,a[1]*.985],[b[0]*.985,b[1]*.985],[b[0]*f,b[1]*f]].map(rr2))}}
+    else if(kind===1){const pts=5+(rnd()*2|0),R1=1.25+Math.min(.4,diff*.03),R0=R1*.5,a0=rnd()*6.28; // a star-shaped hole in the middle
+      voids.push(Array.from({length:pts*2},(_,i)=>{const r=i%2?R0:R1,a=a0+i*3.1416/pts;return rr2([Math.cos(a)*r,Math.sin(a)*r])}))}
+    else for(let i=0,g=0,k=diff>5?3:2;i<k&&g<80;g++){const hor=rnd()<.5,w=hor?2+rnd():.9,d=hor?.9:2+rnd(),x=lerp(-Wv/2+w/2+.9,Wv/2-w/2-.9,rnd()),z=lerp(-Dv/2+d/2+1.6,Dv/2-d/2-.9,rnd()); // long slots
+      if(voids.some(V=>Math.abs((V[0][0]+V[2][0])/2-x)<w/2+1.25+(V[2][0]-V[0][0])/2&&Math.abs((V[0][1]+V[2][1])/2-z)<d/2+1.25+(V[2][1]-V[0][1])/2))continue;voids.push([[x-w/2,z-d/2],[x+w/2,z-d/2],[x+w/2,z+d/2],[x-w/2,z+d/2]].map(rr2));i++}
+    if(!voids.length)return null;
+    const E=shape?edgesOf(SHAPES[shape](Wv,Dv)):null;n=Math.min(n,6);const sz=sizes(n).map(x=>Math.min(x,2)),reg=[-Wv/2,Wv/2,-Dv/2,Dv/2],bad=(x,z,r)=>nearVoid(voids,x,z,r);
+    const t=[{in:(x,z,r)=>(!E||inPoly(E,x,z,r+.15))&&!bad(x,z,r+.22)}],hp=scatter(rnd,rw(sz),reg,t,.3);if(!hp)return null;
+    t.push({in:(x,z,r)=>!bad(x,z,r+.5)});const bp=scatter(rnd,rb(sz),reg,t,.25);if(!bp||!connected(Wv,Dv,[],[...bp,...hp],.4,E,bad))return null;
+    const Lv={W:Wv,D:Dv,voids,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])};if(shape)Lv.shape=shape;return Lv}
+  if(theme===16){ // pedestals: some wells sit on small platforms in the air; a vent on the floor lifts a ball up to the platform of its colour
+    const K=diff>5||hard?3:2,top=1.1,xs=K===2?[-1.9,1.9]:[-2.2,0,2.2],pz=+(-hd+.95).toFixed(2),decks=xs.map(x=>[x,pz,1.5,1.5,top]),ord=xs.map((_,i)=>i);
+    for(let a=K-1;a>0;a--){const b=rnd()*(a+1)|0;[ord[a],ord[b]]=[ord[b],ord[a]]}
+    n=clamp(n,K+1,7);const sz=sizes(n).map(x=>Math.min(x,2)),t=[],vp=scatter(rnd,Array(K).fill(.5),[-hw,hw,-hd+2.7,hd-1.6],t,.5);if(!vp)return null;
+    const chutes=vp.map((q,i)=>[q[0],q[1],xs[ord[i]],pz,.46,0,top]),hp=scatter(rnd,rw(sz.slice(K)),[-hw,hw,-hd+2.3,hd-1.3],t,.3);if(!hp)return null;
+    return mk(sz,row(n,hd-.6,.8),[...xs.map(x=>[x,pz]),...hp],{decks,chutes,ped:1})}
+  if(theme===13){ // rod ring: a round table fenced by eight to ten rods; a ball that finds a gap is gone
+    const Wr=6.8,R=Wr/2,N=8+(rnd()*3|0),G=clamp(3+(diff/3|0)+(hard?1:0),3,N),a0=rnd()*6.2832,op=[...Array(N).keys()];
+    for(let a=N-1;a>0;a--){const b=rnd()*(a+1)|0;[op[a],op[b]]=[op[b],op[a]]}
+    const gaps=op.slice(0,G).sort((p,q)=>p-q).map(i=>a0+i*6.2832/N),gw=.86/R,rods=gaps.map((g,i)=>[+(g+gw/2).toFixed(3),+((i<G-1?gaps[i+1]:gaps[0]+6.2832)-gw/2).toFixed(3)]);
+    const E=edgesOf(SHAPES.round(Wr,Wr));n=Math.min(n,6);const sz=sizes(n).map(x=>Math.min(x,2)),reg=[-R,R,-R,R],t=[{in:(x,z,r)=>inPoly(E,x,z,r+.5)}],hp=scatter(rnd,rw(sz),reg,t,.3);if(!hp)return null;
+    t.push({in:(x,z,r)=>inPoly(E,x,z,r+1)});const bp=scatter(rnd,rb(sz),reg,t,.25);if(!bp)return null;
+    return{W:Wr,D:Wr,shape:'round',open:1,rods,posts:Array.from({length:N},(_,i)=>+(a0+i*6.2832/N).toFixed(3)),balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
   if(theme===9){ // swarm: a big table and a crowd of small balls
     const Wb=8,Db=10,k=clamp(Math.round(diff*2.3)-3,10,40),sz=Array.from({length:k},()=>rnd()<(k>20?.75:.5)?0:1),t=[],reg=[-Wb/2,Wb/2,-Db/2,Db/2],gp=k>20?.16:.26,hp=scatter(rnd,rw(sz),reg,t,gp),bp=hp&&scatter(rnd,rb(sz),reg,t,gp); // the crowd grows from 10 balls toward 40
     if(!bp)return null;return{W:Wb,D:Db,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
@@ -425,7 +473,7 @@ function genLevel(theme,diff,seed,hard,cap){
     n=Math.min(n,6);const sz=Array.from({length:n},()=>diff<4?1:rnd()<.4?0:1),t=walls.map(w=>({x:w[0],z:w[1],w:w[2],d:w[3]}));
     const hp=scatter(rnd,rw(sz),[-Wl/2,Wl/2,-bz+.6,Dl/2],t,.3),bp=hp&&scatter(rnd,rb(sz),[-Wl/2,Wl/2,-Dl/2,-bz],t,.15);
     if(!bp||!connected(Wl,Dl,walls,[...bp,...hp],.3))return null;return{W:Wl,D:Dl,walls,balls:bp.map((q,i)=>[q[0],q[1],sz[i]]),holes:hp.map((q,i)=>[q[0],q[1],sz[i]])}}
-  const sc=diff>3?.8:1,C=sc<1?8:5+Math.min(2,diff/2|0),Rw=Math.min(sc<1?12:9,C+2+(rnd()<.5?1:0)+(hard?1:0)),k=Math.min(6,3+(diff/4|0)); // small cells later: 8 x 12 lanes on the same table
+  const sc=diff>3?.8:1,C=sc<1?8:5+Math.min(2,diff/2|0),Rw=Math.min(sc<1?12:9,C+2+(rnd()<.5?1:0)+(hard?1:0)),k=Math.min(6,Math.max(lo||3,3+(diff/4|0))); // small cells later: 8 x 12 lanes on the same table
   return {maze:[C,Rw,seed,sc],sz:Array.from({length:k},()=>pick(sc<1?[0,1]:kinds.filter(x=>x<3)))};
 }
 // ---------- pieces ----------
@@ -434,22 +482,25 @@ function genLevel(theme,diff,seed,hard,cap){
 const rectOf=w=>({x:w[0],z:w[1],w:w[2],d:w[3]});
 const prd=(px,pz,w)=>Math.hypot(px-clamp(px,w[0]-w[2]/2,w[0]+w[2]/2),pz-clamp(pz,w[1]-w[3]/2,w[1]+w[3]/2)); // point to rectangle
 const MOD_TIP={bump:'Spring bumpers kick a ball away. Use them to bank a shot, or keep clear.',belt:'The striped belts carry a ball along. Ride them or fight them.',
-  split:'Hit the gold x2 bumper: it splits one ball into two. There is a well for each.',hot:'Red walls are explosive. One touch and the level starts over.',
+  slope:'This table is not flat. Balls roll downhill on their own, so you are always holding them against the slope.',guard:'Striped ramps guard this well. Come at it across a ramp and you are swept past; find the open side.',split:'Hit the gold x2 bumper: it splits one ball into two. There is a well for each.',hot:'Red walls are explosive. One touch and the level starts over.',
   poles:'Two odd balls have no well. The blue one pulls every ball toward it, the red one pushes them away.',slip:'A slick table: the lightest tilt sends everything flying. Balance it.',
   open:'No rails here. If one ball rolls off the edge, the level starts over.'};
-const MOD_TAG={bump:'Spring bumpers',belt:'Conveyor belts',split:'Ball splitter',hot:'Explosive walls',poles:'Pole balls',slip:'Slick table',open:'No rails'};
+const MOD_TAG={slope:'Sloped table',guard:'Guarded wells',bump:'Spring bumpers',belt:'Conveyor belts',split:'Ball splitter',hot:'Explosive walls',poles:'Pole balls',slip:'Slick table',open:'No rails'};
 function addMod(L,m,rnd,diff){
   if(m==='slip'){if(L.slip)return false;L.slip=1;return true}
-  if(m==='open'&&L.decks&&L.decks.length){if(L.open||L.balls.length>4||(L.portals&&L.portals.length))return false;L.open=1;return true} // floors with no rails
+  if(m==='slope'){if(L.slope||L.shape||L.open||L.hot||L.float||L.ped||L.voids||L.rods||(L.decks&&L.decks.length)||(L.balls&&L.balls.length>12))return false;L.slope=[['bowl','bowl','hill','down','up'][rnd()*5|0],+(2+Math.min(1.2,diff*.1)).toFixed(1)];return true} // the table itself is not flat
+  if(m==='open'&&L.decks&&L.decks.length){if(L.open||L.balls.length>6||(L.portals&&L.portals.length)||(L.chutes&&L.chutes.length))return false;L.open=1;return true} // floors with no rails
   if(L.maze||L[m]||(L.decks&&L.decks.length)||(L.portals&&L.portals.length)||(L.gates&&L.gates.length)||(L.movers&&L.movers.length))return false;
   const W=L.W,D=L.D,E=L.shape?edgesOf(SHAPES[L.shape](W,D)):null,reg=[-W/2,W/2,-D/2,D/2];L.walls=L.walls||[];
   const solid=()=>[...L.walls,...(L.hot||[]),...(L.bump||[]).concat(L.split||[]).map(b=>[b[0],b[1],b[2]*2,b[2]*2])];
   const taken=pad=>[...(E?[{in:(x,z,r)=>inPoly(E,x,z,r+.25)}]:[]),...solid().map(rectOf),...(L.belts||[]).map(rectOf),...L.balls.map(b=>({x:b[0],z:b[1],r:SZ[b[2]]+pad})),...L.holes.map(h=>({x:h[0],z:h[1],r:RW[h[2]]+pad*.7})),...(L.poles||[]).map(q=>({x:q[0],z:q[1],r:.25+pad}))];
   const ok=r=>connected(W,D,solid(),[...L.balls,...L.holes],r||.46,E);
   const corners=(w,mg)=>!E||[[-1,-1],[1,-1],[1,1],[-1,1]].every(c=>inPoly(E,w[0]+c[0]*w[2]/2,w[1]+c[1]*w[3]/2,mg));
-  if(m==='open'){if(L.walls.length>4||L.balls.length>7||L.split)return false; // balls that start too near the edge leave, with their wells
+  if(m==='open'){if(L.walls.length>4||L.balls.length>8||L.split)return false; // balls that start too near the edge leave, with their wells
     const near=b=>E?!inPoly(E,b[0],b[1],.8):Math.abs(b[0])>W/2-.8||Math.abs(b[1])>D/2-.8,keepers=L.balls.map((b,i)=>i).filter(i=>!near(L.balls[i]));
-    if(keepers.length<2)return false;L.balls=keepers.map(i=>L.balls[i]);L.holes=keepers.map(i=>L.holes[i]);L.open=1;return true}
+    if(keepers.length<(L.lo||2))return false;keepers.length=Math.min(keepers.length,6);L.balls=keepers.map(i=>L.balls[i]);L.holes=keepers.map(i=>L.holes[i]);L.open=1;return true}
+  if((m==='open'||m==='hot')&&L.slope)return false;
+  if(m==='slope-old'){L.slope=[['bowl','hill','down','up'][rnd()*4|0],+(2+Math.min(1.2,diff*.1)).toFixed(1)];return true} // the table itself is not flat
   if(m==='poles'){const q=scatter(rnd,[.25,.25],reg,taken(.5),.3);if(!q)return false;L.poles=[[q[0][0],q[0][1],1],[q[1][0],q[1][1],-1]];return true}
   if(m==='bump'){const k=2+Math.min(2,diff/5|0),q=scatter(rnd,Array(k).fill(.3),reg,taken(.45),.35);if(!q)return false;L.bump=q.map(v=>[v[0],v[1],.3]);if(ok())return true;delete L.bump;return false}
   if(m==='split'){const k=diff>8?2:1;if(L.balls.length+k>9)return false; // every ball becomes one size, so a twin always has a well that fits
@@ -462,6 +513,15 @@ function addMod(L,m,rnd,diff){
       if(!corners(w,.2)||L.balls.some(b=>prd(b[0],b[1],w)<1.05)||L.holes.some(h=>prd(h[0],h[1],w)<.85)||(L.poles||[]).some(q=>prd(q[0],q[1],w)<1.2))continue;
       if([...solid(),...hot,...(L.belts||[])].some(o=>Math.abs(w[0]-o[0])<(w[2]+o[2])/2+.8&&Math.abs(w[1]-o[1])<(w[3]+o[3])/2+.8))continue;hot.push(w)}
     if(!hot.length)return false;L.hot=hot;if(ok(.6))return true;delete L.hot;return false}
+  if(m==='guard'){const g=[],pairs=diff>6?2:1,ord=L.holes.map((h,i)=>i); // ramps beside a well: come at it from a guarded side and you are swept past
+    for(let a=ord.length-1;a>0;a--){const b=rnd()*(a+1)|0;[ord[a],ord[b]]=[ord[b],ord[a]]}
+    for(const i of ord){if(g.length>=pairs*2)break;const h=L.holes[i],R=RW[h[2]],hor=rnd()<.5,sg=rnd()<.5?1:-1,pair=[];
+      for(const sd of [-1,1]){const w=hor?[+(h[0]+sd*(R+.62)).toFixed(2),h[1],1,1.1,0,sg,3.2]:[h[0],+(h[1]+sd*(R+.62)).toFixed(2),1.1,1,sg,0,3.2];
+        if(Math.abs(w[0])+w[2]/2>W/2-.05||Math.abs(w[1])+w[3]/2>D/2-.05||!corners(w,.05))break;
+        if(L.balls.some(b=>prd(b[0],b[1],w)<SZ[b[2]]+.15)||L.holes.some((o,j)=>j!==i&&prd(o[0],o[1],w)<RW[o[2]]+.1))break;
+        if([...solid(),...(L.belts||[]),...g].some(o=>Math.abs(w[0]-o[0])<(w[2]+o[2])/2+.05&&Math.abs(w[1]-o[1])<(w[3]+o[3])/2+.05))break;pair.push(w)}
+      if(pair.length===2)g.push(...pair)}
+    if(!g.length)return false;L.belts=(L.belts||[]).concat(g);L.guard=1;return true}
   if(m==='belt'){const bl=[];
     for(let t=0;t<160&&bl.length<(diff>6?2:1);t++){const len=2+rnd()*1.2,hor=rnd()<.5,sg=rnd()<.5?1:-1,w=[+lerp(-W/2+1.2,W/2-1.2,rnd()).toFixed(2),+lerp(-D/2+1.2,D/2-1.2,rnd()).toFixed(2),hor?+len.toFixed(2):1.1,hor?1.1:+len.toFixed(2),hor?sg:0,hor?0:sg,+(1.6+rnd()*.8).toFixed(1)];
       if(Math.abs(w[0])+w[2]/2>W/2-.05||Math.abs(w[1])+w[3]/2>D/2-.05||!corners(w,.05))continue;
@@ -474,27 +534,30 @@ function addMod(L,m,rnd,diff){
 // at stop 5, a breather, a second hard board at stop 9, a breather, then the boss. Every chapter brings something
 // new (a board type, a piece, or both), taught first on a simple board and then mixed into everything after it.
 const CH=12;
-const NEWT=[[0,8],[1],[5,2],[10,7],[9,6],[3,11],[4]]; // board types arriving in chapters 1, 2, 3... Everything has been met by level 96; after that it only gets denser
-const NEWM=['','bump','open','belt','split','poles','slip','hot']; // pieces arriving in chapters 2, 3, 4...
+const NEWT=[[0,8],[1,13],[5,12,3],[2,10,14],[7,6,16],[9,11,15],[4]]; // board types arriving in chapters 1, 2, 3... Everything has been met by level 96; after that it only gets denser
+const NEWM=['','bump','guard','slope','open','split','poles','slip','hot']; // pieces arriving in chapters 2, 3, 4...
 const MODOK=t=>t===0||t===1||t===8||t===9, MAZE=t=>t===5||t===6||t===10||t===11;
 const HAND=LEVELS.splice(0).filter(l=>l.w!==5);HAND.forEach(l=>l.theme=l.w);
-const handQ=t=>HAND.filter(l=>l.theme===t&&!l.f&&!l.used), handF=t=>HAND.filter(l=>l.theme===t&&l.f&&!l.used);
+const handQ=(t,c)=>HAND.filter(l=>l.theme===t&&!l.f&&!l.used&&(c<2||l.balls.length>=5)), handF=(t,c)=>HAND.filter(l=>l.theme===t&&l.f&&!l.used&&(c<2||l.balls.length>=5));
 const CHAPTERS=[],seenT={},seenM={};let lastMz=-1;
 for(let c=0;c*CH<TOTAL_STAGES;c++){
-  const rnd=rng(4242+c*17),types=NEWT.slice(0,c+1).flat(),mods=NEWM.slice(1,c+1),fresh=NEWT[c]||[],newM=NEWM[c]||'';
+  const rnd=rng(4242+c*17),types=NEWT.slice(0,c+1).flat(),mods=NEWM.slice(1,c+1).concat(c>=4?['belt']:[]),fresh=NEWT[c]||[],newM=NEWM[c]||'';
   CHAPTERS.push({name:'Chapter '+(c+1),card:WORLDS[c%WORLDS.length].card});
   const flat=types.filter(t=>!MAZE(t)),mz=types.filter(MAZE),freshMz=fresh.filter(MAZE),freshFl=fresh.filter(t=>!MAZE(t));
   const seq=c===0?[0,0,0,8,0,8,0,8,8]:[],any=()=>{let t;do t=flat[rnd()*flat.length|0];while(t===seq[seq.length-1]);return t};
-  if(c>0){seq.push(freshFl.length?freshFl[0]:any());seq.push(newM?0:any());if(freshFl.length)seq.push(freshFl[0]);while(seq.length<9)seq.push(any())}
+  if(c>0){while(seq.length<9)seq.push(any());if(freshFl.length){seq[0]=freshFl[0];seq[4]=freshFl[freshFl.length-1];seq[7]=freshFl[freshFl.length-1];if(c<2&&freshFl.length>1){seq[2]=freshFl[1];seq[4]=freshFl[0];seq[6]=freshFl[1]}}
+    const keepI=freshFl.length?(c<2?[0,2,4,6]:[0,4,7]):[];for(let i=1;i<9;i++)if(!keepI.includes(i))while(seq[i]===seq[i-1]||(i<8&&seq[i]===seq[i+1]&&flat.length>2))seq[i]=flat[rnd()*flat.length|0]} // new board types get the free stops, and no type runs twice in a row
   const teach=c>0&&newM?1:-1;let reg=0,mzN=0;
   const put=(L,t,extra)=>{L.w=c;L.theme=t;L.pal=PAL_OF[t];Object.assign(L,extra);if(!L.name){const nr=rng(c*31+LEVELS.length*7+3);L.name=NA[nr()*NA.length|0]+' '+NB[nr()*NB.length|0]}
     (L.mods||[]).forEach(m=>{if(!seenM[m]){seenM[m]=1;L.tip=MOD_TIP[m]}});
     if(!seenT[t]){seenT[t]=1;if(!L.tip&&FIRST_TIP[t])L.tip=FIRST_TIP[t]}LEVELS.push(L)};
-  const make=(t,k,hard,boss,want)=>{const ease=k===0||k===5||k===9?1:0,diff=Math.max(1,1+Math.min(c,20)*.5+k*.2-ease+(hard?3:0)+(boss?5:0))|0;let L=null;
-    for(let a=0;a<40&&!L;a++){const seed=1000+c*97+k*13+a*7919;L=genLevel(t,diff,seed,hard||boss,want.includes('open')?(hard||boss?4:3):want.includes('hot')?(hard||boss?5:4):want.includes('split')?6:0);
+  const make=(t,k,hard,boss,want)=>{const lo=c>=2?5:3,ease=k===0||k===5||k===9?1:0,diff=Math.max(1,1+Math.min(c,20)*.5+k*.2-ease+(hard?3:0)+(boss?5:0))|0;let L=null;
+    for(let a=0;a<40&&!L;a++){const seed=1000+c*97+k*13+a*7919;L=genLevel(t,diff,seed,hard||boss,want.includes('open')?8:want.includes('hot')?(hard||boss?6:5):want.includes('split')?6:0,lo);if(L)L.lo=lo;
       if(L&&want.length){const mr=rng(seed+5);for(const m of want)if(addMod(L,m,mr,diff))(L.mods=L.mods||[]).push(m);if(!L.mods&&a<30)L=null}} // keep looking until a wanted piece fits
-    return L||genLevel(0,1,5000+c*7+k,false)};
-  const wants=(t,n)=>{const out=[],pool=MODOK(t)?mods:rnd()<.5?mods.filter(m=>m==='slip'):[];for(let g=0;g<8&&out.length<Math.min(n,pool.length);g++){const m=pool[rnd()*pool.length|0],clash=(m==='hot'&&(out.includes('slip')||out.includes('split')))||((m==='slip'||m==='split')&&out.includes('hot'));if(!out.includes(m)&&!clash)out.push(m)}return out};
+    for(let a=0;a<40&&!L;a++)L=genLevel(t,Math.max(1,diff-4),7000+c*31+k*7+a*131,false,0,Math.min(lo,4)); // too tight to build: the same board type, a notch easier
+    const sl=rnd();if(L&&c>=3&&sl<.26&&!(L.mods||[]).some(m=>m==='slope'||m==='open'||m==='hot'||m==='slip')&&addMod(L,'slope',rng(c*53+k*11+7),diff))(L.mods=L.mods||[]).push('slope'); // about one board in five is tipped
+    return L||genLevel(0,3,5000+c*7+k,false,0,lo)};
+  const wants=(t,n)=>{const out=[],pool=MODOK(t)?mods.concat(mods.includes('slope')&&t!==8?['slope','slope','slope']:[]):rnd()<.5?mods.filter(m=>m==='slip'):[];for(let g=0;g<8&&out.length<Math.min(n,pool.length);g++){const m=pool[rnd()*pool.length|0],clash=(m==='hot'&&(out.includes('slip')||out.includes('split')))||((m==='slip'||m==='split')&&out.includes('hot'))||(m==='slope'&&(out.includes('open')||out.includes('hot')))||((m==='open'||m==='hot')&&out.includes('slope'));if(!out.includes(m)&&!clash)out.push(m)}return out};
   const regular=k=>{const r=reg++;let t=seq[r];if(r===teach){put(make(0,k,false,false,[newM]),0);return}
     if((k===2||k===6||k===10)&&mz.length){ // every fourth stop is a maze of some kind
       let x=freshMz.length&&!mzN?freshMz[0]:-1;if(x<0)do x=mz[rnd()*mz.length|0];while(x===lastMz&&mz.length>1);mzN++;lastMz=x;
@@ -502,9 +565,9 @@ for(let c=0;c*CH<TOTAL_STAGES;c++){
     if((k===3||k===7)&&mods.includes('open')){ // every fourth stop the rails come off: a flat table with bumpers, or a table with floors
       const floors=types.filter(x=>x===2||x===7),flat=[0,8,1];t=floors.length&&rnd()<.45?floors[rnd()*floors.length|0]:flat[rnd()*3|0];
       put(make(t,k,false,false,t===2||t===7?['open']:rnd()<.65?['bump','open']:['open']),t);return}
-    const q=handQ(t)[0];if(q){q.used=1;put(q,t);return}
+    const q=handQ(t,c)[0];if(q){q.used=1;put(q,t);return}
     put(make(t,k,false,false,rnd()<(MODOK(t)?(c>=8?.8:.6):.14)?wants(t,c>=12&&rnd()<.35?2:1):[]),t)};
-  const hardOne=k=>{const ft=types.find(t=>handF(t).length);if(ft!=null){const q=handF(ft)[0];q.used=1;put(q,ft);return}
+  const hardOne=k=>{const ft=types.find(t=>handF(t,c).length);if(ft!=null){const q=handF(ft,c)[0];q.used=1;put(q,ft);return}
     const tp=mods.length&&rnd()<.6?types.filter(MODOK):types,t=tp[rnd()*tp.length|0],L=make(t,k,true,false,wants(t,1+(rnd()<.4?1:0)));put(L,t,{f:1,tag:L.mods?MOD_TAG[L.mods[0]]:HARDTAG[t]})};
   for(let k=0;k<CH;k++){if(k===4||k===8)hardOne(k);else if(k===CH-1){const pool=mods.length?types.filter(MODOK):flat,bt=pool[rnd()*pool.length|0];put(make(bt,k,false,true,wants(bt,2)),bt,{boss:1})}else regular(k)}
 }
@@ -512,7 +575,7 @@ const norm=L=>{
   if(L.maze&&!L.balls)Object.assign(L,buildMaze(L));
   if(L.shape){L.poly=SHAPES[L.shape](L.W,L.D);L.edges=edgesOf(L.poly)}
   L.walls=L.walls||[];L.decks=L.decks||[];L.portals=L.portals||[];L.gates=L.gates||[];L.plates=L.plates||[];L.movers=L.movers||[];
-  L.bump=L.bump||[];L.split=L.split||[];L.belts=L.belts||[];L.hot=L.hot||[];L.poles=L.poles||[];L.need=L.balls.length+L.split.length;
+  L.bump=L.bump||[];L.split=L.split||[];L.belts=L.belts||[];L.hot=L.hot||[];L.poles=L.poles||[];L.chutes=L.chutes||[];L.voids=L.voids||null;L.need=L.balls.length+L.split.length;
   const n=L.balls.length, base=L.maze?L.W*L.D*.5+4*n:5+3.5*L.need+(L.walls.length?5:0)+(L.decks.length?8:0)+(L.hot.length||L.open?6:0);
   L.par=[Math.round(base*.7),Math.round(base*1.6)];
 };
@@ -611,6 +674,7 @@ const rig=new THREE.Group(), board=new THREE.Group();rig.add(board);scene.add(ri
 const ballGeo=SZ.map(r=>new THREE.SphereGeometry(r,44,30)), stoneGeo=SZ.map(r=>new THREE.IcosahedronGeometry(r*1.08,0));
 const ringGeo=RW.map(r=>{const g=new THREE.RingGeometry(r+.015,r+.07,48);g.rotateX(-Math.PI/2);return g});
 const rippleGeo=new THREE.RingGeometry(.86,1,48);rippleGeo.rotateX(-Math.PI/2);
+let chutes=[];
 let cur=-1,L=null,WD=null,balls=[],holes=[],rects=[],decks=[],pads=[],gates=[],plates=[],movers=[],ripples=[],own=[],bumps=[],belts=[],hots=[],addBall=null,bot=0;
 const haloGeo=new THREE.SphereGeometry(1,24,16);
 function beltTex(){const cv=document.createElement('canvas');cv.width=cv.height=64;const g=cv.getContext('2d');g.fillStyle='rgba(6,8,24,.55)';g.fillRect(0,0,64,64);g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=7;g.lineCap='round';g.lineJoin='round';g.beginPath();g.moveTo(14,44);g.lineTo(32,24);g.lineTo(50,44);g.stroke();const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
@@ -622,13 +686,18 @@ const tilt={x:0,y:0,vx:0,vy:0}, target={x:0,y:0};
 let mode='home',time=0,started=false,placed=0,fit=10,run=0,wild=0;const tries={};
 
 function rrect(w,d,r){const s=new THREE.Shape(),x=-w/2,y=-d/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+d-r);s.quadraticCurveTo(x+w,y+d,x+w-r,y+d);s.lineTo(x+r,y+d);s.quadraticCurveTo(x,y+d,x,y+d-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s}
-function floorTex(c){
+function floorTex(c,sl){
   const cv=document.createElement('canvas');cv.width=cv.height=512;const g=cv.getContext('2d');
   const lg=g.createLinearGradient(0,0,0,512);lg.addColorStop(0,c[0]);lg.addColorStop(.45,c[1]);lg.addColorStop(1,c[2]);g.fillStyle=lg;g.fillRect(0,0,512,512);
   const rg=g.createRadialGradient(256,150,10,256,256,380);rg.addColorStop(0,'rgba(255,255,255,.08)');rg.addColorStop(.5,'rgba(255,255,255,0)');rg.addColorStop(1,'rgba(0,0,0,.35)');g.fillStyle=rg;g.fillRect(0,0,512,512);
+  if(sl==='bowl'||sl==='hill'){ // four facets, lit as a dip or a rise
+    const tri=(a,b,k)=>{g.fillStyle=k;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.lineTo(256,256);g.closePath();g.fill()},hi='rgba(255,255,255,.26)',lo='rgba(0,0,0,.3)',mid='rgba(0,0,0,.1)',q=sl==='bowl';
+    tri([0,0],[512,0],q?hi:lo);tri([0,512],[512,512],q?lo:hi);tri([0,0],[0,512],mid);tri([512,0],[512,512],q?mid:'rgba(255,255,255,.1)');
+    g.strokeStyle='rgba(255,255,255,.3)';g.lineWidth=3;g.beginPath();g.moveTo(0,0);g.lineTo(512,512);g.moveTo(512,0);g.lineTo(0,512);g.stroke()}
+  else if(sl){for(let y=0;y<512;y+=64){const u=sl==='down'?1-y/512:y/512;g.fillStyle='rgba(255,255,255,'+(.02+.16*u)+')';g.fillRect(0,y,512,58);g.fillStyle='rgba(0,0,0,.18)';g.fillRect(0,y+58,512,6)}} // a ramp: steps of light, brightest at the top
   const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;
 }
-function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[];bumps=[];belts=[];hots=[]}
+function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[];bumps=[];belts=[];hots=[];chutes=[]}
 const keep=o=>(own.push(o),o);
 const inRect=(d,x,z)=>x>d.x0&&x<d.x1&&z>d.z0&&z<d.z1;
 const deckAt=(x,z,below=1e9)=>{let best=null;for(const d of decks)if(d.top<below-.01&&inRect(d,x,z)&&(!best||d.top>best.top))best=d;return best};
@@ -641,27 +710,40 @@ function load(i){
   L.decks.forEach(([x,z,w,d,h])=>decks.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,top:h,x,z,w,d}));
   const hl=L.holes.map(([x,z,s])=>{const d=deckAt(x,z);return{x,z,s,h:d?d.top:0,deck:d}});
   const cut=(sh,list,ox,oz)=>list.forEach(h=>{const p=new THREE.Path();p.absarc(h.x-ox,-(h.z-oz),RW[h.s],0,6.2832,true);sh.holes.push(p)});
-  const tex=keep(floorTex(WD.floor));tex.repeat.set(1/W,1/D);tex.offset.set(.5,.5);
+  const tex=keep(floorTex(WD.floor,L.slope&&L.slope[0]));tex.repeat.set(1/W,1/D);tex.offset.set(.5,.5);
   const top=keep(new THREE.MeshPhysicalMaterial({map:tex,roughness:.5,metalness:0,envMapIntensity:.14}));
   const dark=keep(new THREE.MeshStandardMaterial({color:col(WD.rim).multiplyScalar(.5),roughness:.8}));
   const rimMat=keep(new THREE.MeshPhysicalMaterial({color:col(WD.rim),roughness:.5,metalness:.1,envMapIntensity:.3}));
   // floor with real wells cut through it
-  const P=L.poly,outline=(o,pts)=>{pts.forEach((q,k)=>k?o.lineTo(q[0],-q[1]):o.moveTo(q[0],-q[1]));o.closePath();return o};
-  const sh=P?outline(new THREE.Shape(),P):rrect(W,D,.02);cut(sh,hl.filter(h=>!h.deck),0,0);
+  const FL=L.float,P=L.poly||(FL?[[-W/2,FL[1]],[W/2,FL[1]],[W/2,D/2],[-W/2,D/2]]:null),PE=L.edges||(P?edgesOf(P):null),outline=(o,pts)=>{pts.forEach((q,k)=>k?o.lineTo(q[0],-q[1]):o.moveTo(q[0],-q[1]));o.closePath();return o};
+  const sh=P?outline(new THREE.Shape(),P):rrect(W,D,.02);cut(sh,hl.filter(h=>!h.deck),0,0);const voidCut=o=>{(L.voids||[]).forEach(V=>{const q=new THREE.Path();V.forEach((v,k)=>k?q.lineTo(v[0],-v[1]):q.moveTo(v[0],-v[1]));q.closePath();o.holes.push(q)});return o};voidCut(sh);const thin=FL||L.ped;
   const fg=keep(new THREE.ExtrudeGeometry(sh,{depth:WELL,bevelEnabled:false,curveSegments:40}));fg.rotateX(-Math.PI/2);fg.translate(0,-WELL,0);
   const floor=new THREE.Mesh(fg,[top,dark]);floor.receiveShadow=true;board.add(floor);
   // raised decks: solid terraces with their own wells; marbles can roll off the open edges
   const deckTop=keep(new THREE.MeshPhysicalMaterial({map:tex,color:new THREE.Color(1.25,1.25,1.25),roughness:.45,metalness:0,envMapIntensity:.16}));
   const deckSide=keep(new THREE.MeshStandardMaterial({color:col(WD.floor[2]).multiplyScalar(.7),roughness:.7}));
-  decks.forEach(d=>{const s=new THREE.Shape();s.moveTo(d.x0,-d.z1);s.lineTo(d.x1,-d.z1);s.lineTo(d.x1,-d.z0);s.lineTo(d.x0,-d.z0);s.closePath();cut(s,hl.filter(h=>h.deck===d),0,0);
-    const g=keep(new THREE.ExtrudeGeometry(s,{depth:d.top,bevelEnabled:false,curveSegments:40}));g.rotateX(-Math.PI/2);
+  decks.forEach(d=>{const s=new THREE.Shape();s.moveTo(d.x0,-d.z1);s.lineTo(d.x1,-d.z1);s.lineTo(d.x1,-d.z0);s.lineTo(d.x0,-d.z0);s.closePath();cut(s,hl.filter(h=>h.deck===d),0,0);L.chutes.forEach(c=>{if(inRect(d,c[0],c[1])){const q=new THREE.Path();q.absarc(c[0],-c[1],c[4],0,6.2832,true);s.holes.push(q)}});
+    const g=keep(new THREE.ExtrudeGeometry(s,{depth:thin?.24:d.top,bevelEnabled:false,curveSegments:40}));g.rotateX(-Math.PI/2);if(thin)g.translate(0,d.top-.24,0);
     const m=new THREE.Mesh(g,[deckTop,deckSide]);m.castShadow=m.receiveShadow=true;board.add(m);
-    rects.push({x0:d.x0,x1:d.x1,z0:d.z0,z1:d.z1,deck:d})});
+    if(FL){const o=rrect(d.w+.24,d.d+.24,.15),inn=new THREE.Path();inn.moveTo(-d.w/2,-d.d/2);inn.lineTo(-d.w/2,d.d/2);inn.lineTo(d.w/2,d.d/2);inn.lineTo(d.w/2,-d.d/2);inn.closePath();o.holes.push(inn); // the floating plate carries its own rail
+      const g2=keep(new THREE.ExtrudeGeometry(o,{depth:.32+WALLH,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:2}));g2.rotateX(-Math.PI/2);const fm=new THREE.Mesh(g2,keep(new THREE.MeshPhysicalMaterial({color:col(WD.rim),roughness:.5,metalness:.1,envMapIntensity:.3})));fm.position.set(d.x,d.top-.32,d.z);fm.castShadow=true;board.add(fm)}
+    if(L.ped){const post=new THREE.Mesh(keep(new THREE.CylinderGeometry(.08,.12,d.top-.2,14)),rimMat);post.position.set(d.x,(d.top-.2)/2,d.z-d.d/2+.12);post.castShadow=true;board.add(post)} // a platform on a post: balls roll underneath it
+    else rects.push({x0:d.x0,x1:d.x1,z0:d.z0,z1:d.z1,deck:d})});
   // tray: frame + base
-  const fs=P?outline(new THREE.Shape(),grow(P,L.edges,RIM)):rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();if(P)outline(inner,P);else{inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath()}fs.holes.push(inner);
+  const fs=P?outline(new THREE.Shape(),grow(P,PE,RIM)):rrect(W+RIM*2,D+RIM*2,.2);const inner=new THREE.Path();if(P)outline(inner,P);else{inner.moveTo(-W/2,-D/2);inner.lineTo(-W/2,D/2);inner.lineTo(W/2,D/2);inner.lineTo(W/2,-D/2);inner.closePath()}fs.holes.push(inner);
   const frg=keep(new THREE.ExtrudeGeometry(fs,{depth:WELL+.08+WALLH,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:3,curveSegments:16}));frg.rotateX(-Math.PI/2);frg.translate(0,-WELL-.08,0);
   const frame=new THREE.Mesh(frg,rimMat);frame.castShadow=frame.receiveShadow=true;if(!L.open)board.add(frame);
-  let bg;if(P){bg=keep(new THREE.ExtrudeGeometry(outline(new THREE.Shape(),P),{depth:.08,bevelEnabled:false}));bg.rotateX(-Math.PI/2);bg.translate(0,-.04,0)}else bg=keep(new THREE.BoxGeometry(W,.08,D));
+  // rod ring: curved rods round the rim with posts between them
+  if(L.rods){const RR=L.W/2-.12;L.rods.forEach(([a0,a1])=>{const g=keep(new THREE.TorusGeometry(RR,.09,10,Math.max(8,Math.round((a1-a0)*14)),a1-a0));g.rotateX(Math.PI/2);const m=new THREE.Mesh(g,rimMat);m.rotation.y=-a0;m.position.y=WALLH*.6;m.castShadow=true;board.add(m)});
+    const pg=keep(new THREE.CylinderGeometry(.13,.15,WALLH*1.35,16)),ends=L.rods.flat();[...L.posts.filter(a=>L.rods.some(q=>{let u=a-q[0];u-=Math.floor(u/6.2832)*6.2832;return u<=q[1]-q[0]})),...ends].forEach(an=>{const q=new THREE.Mesh(pg,rimMat);q.position.set(Math.cos(an)*RR,WALLH*.45,Math.sin(an)*RR);q.castShadow=true;board.add(q)})}
+  // trapdoors: a hole through the upper floor and a marked landing spot below
+  L.chutes.forEach(([x,z,lx,lz,r,h,th=0],k)=>{const c=col(th>h&&!L.ped?'#bfeaff':PCOL[k%3]),mk2=(g,o,px,py,pz,flat)=>{const m=new THREE.Mesh(keep(g),keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})));if(flat)m.rotation.x=-Math.PI/2;m.position.set(px,py,pz);board.add(m);return m};
+    if(!FL&&h>0){const pit=new THREE.Mesh(keep(new THREE.CircleGeometry(r,40)),dark);pit.rotation.x=-Math.PI/2;pit.position.set(x,.006,z);board.add(pit)}
+    mk2(new THREE.RingGeometry(r+.02,r+.11,48),.7,x,h+.008,z,1);mk2(new THREE.RingGeometry(.34,.42,40),.45,lx,th+.01,lz,1);mk2(new THREE.CircleGeometry(.34,32),.1,lx,th+.009,lz,1);
+    const ch={x,z,lx,lz,r,h,th,deck:th>0?deckAt(lx,lz):null,tint:th>h&&!L.ped?'#bfeaff':PCOL[k%3]};
+    if(th>h){mk2(new THREE.CircleGeometry(r,32),.16,x,h+.007,z,1);ch.beam=mk2(new THREE.CylinderGeometry(r*.8,r*.95,1.5,28,1,true),.1,x,h+.75,z,0)} // a vent: a column of rising air
+    chutes.push(ch)});
+  let bg;if(P||L.voids){bg=keep(new THREE.ExtrudeGeometry(voidCut(P?outline(new THREE.Shape(),P):rrect(W,D,.02)),{depth:.08,bevelEnabled:false}));bg.rotateX(-Math.PI/2);bg.translate(0,-.04,0)}else bg=keep(new THREE.BoxGeometry(W,.08,D));
   const base=new THREE.Mesh(bg,dark);base.position.y=-WELL-.04;board.add(base);
   // walls stand on whatever surface is under them
   L.walls.forEach(([x,z,w,d])=>{const dk=deckAt(x,z),h=dk?dk.top:0;const m=new THREE.Mesh(keep(new THREE.BoxGeometry(w,WALLH,d)),rimMat);m.position.set(x,h+WALLH/2,z);m.castShadow=m.receiveShadow=true;board.add(m);rects.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,h})});
@@ -718,7 +800,7 @@ function load(i){
   L.poles.forEach(([x,z,sg],k)=>{addBall(x,z,1,null,1,sg).drop=.6+(nb+k)*.07});
   // Hidden magnets: every ball is pushed away from two unseen spots of its own, so no two balls answer a tilt the
   // same way and each has to be steered on its own. A magnet never sits near the ball's start or a well it fits.
-  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.theme===10||L.theme===11?.3:L.walls.length>10?.5:1)*(L.open?0:L.hot.length?.5:1)*(nb>9?.5:1)*(L.slip?.6:1)*(1-.6*ease);
+  const MS=nb<2?0:(3.4+Math.min(3,(L.stage<0?30:L.stage)*.07))*(L.maze||L.theme===10||L.theme===11?.3:L.walls.length>10?.5:1)*(L.open?0:L.slope?.35:L.hot.length||L.voids?.5:1)*(nb>9?.5:1)*(L.slip?.6:1)*(1-.6*ease);
   balls.forEach(b=>{b.mag=[];for(let t=0;MS&&!b.pole&&t<80&&b.mag.length<2;t++){const x=(rnd()-.5)*(W-1),z=(rnd()-.5)*(D-1);
     if(L.edges&&!inPoly(L.edges,x,z,.4))continue;
     if(Math.hypot(x-b.x,z-b.z)<1.4||holes.some(h=>h.s===b.s&&Math.hypot(x-h.x,z-h.z)<1.9)||b.mag.some(m=>Math.hypot(x-m[0],z-m[1])<1.5))continue;
@@ -799,11 +881,17 @@ function step(dt){
     const damp=Math.exp(-(b.stone?1.3:L.open?1.5:.16*(1-.6*wild)*(L.slip?.3:1))*dt), e=b.stone?.2:.6+.25*wild;
     let mx=0,mz=0;for(const m of b.mag){const dx=b.x-m[0],dz=b.z-m[1],d=Math.hypot(dx,dz);if(d<MAGR&&d>.01){const f=m[2]*(1-d/MAGR)*(1-d/MAGR)/d;mx+=dx*f;mz+=dz*f}}
     if(!b.pole)for(const q of balls){if(!q.pole||q.off||q.h!==b.h)continue;const dx=q.x-b.x,dz=q.z-b.z,d=Math.hypot(dx,dz);if(d<POLE_R&&d>.01){const f=POLE_F*q.pole*(1-d/POLE_R)*(1-d/POLE_R)/d;mx+=dx*f;mz+=dz*f}}
+    if(L.slope&&b.h===0){const k=L.slope[0];let gx=0,gz=0;if(k==='down')gz=1;else if(k==='up')gz=-1;else{const u=b.x/hwB,v=b.z/hdB;if(Math.abs(u)>Math.abs(v))gx=-Math.sign(u);else gz=-Math.sign(v);if(k==='hill'){gx=-gx;gz=-gz}}mx+=gx*L.slope[1];mz+=gz*L.slope[1]} // gravity along the slope
     if(b.h===0&&b.fallY<.05)for(const t of belts)if(inRect(t,b.x,b.z)){const u=2.2*(t.sp-(b.vx*t.dx+b.vz*t.dz));mx+=t.dx*u;mz+=t.dz*u}
     {const w=L.open?0:.16*(1+2.5*wild)*Math.sin(clock*b.wf+b.ph),g=b.ka*(1-.32*clamp((b.x*tilt.x+b.z*tilt.y)/Math.max(hwB,hdB),-1,1));b.vx=(b.vx+(ax*g-az*w+mx)*dt)*damp;b.vz=(b.vz+(az*g+ax*w+mz)*dt)*damp}
     {const sp=Math.hypot(b.vx,b.vz),f=(b.stone?1.4:.5*(1-.6*wild)*(L.slip?.15:1)/zip)*b.kf*dt;if(sp>f){b.vx-=b.vx/sp*f;b.vz-=b.vz/sp*f}else b.vx=b.vz=0}
     if(Math.hypot(b.vx,b.vz)<.04&&Math.hypot(ax+mx,az+mz)<(b.stone?.9:.35)){b.vx=b.vz=0}
     b.x+=b.vx*dt;b.z+=b.vz*dt;
+    if(L.voids&&b.h===0&&b.fallY<.05&&L.voids.some(V=>inVoid(V,b.x,b.z))){b.off=1;b.offV=0;sfx('fall');if(!b.pole)fail('A ball fell through a gap in the floor. Keep them on solid ground.');continue}
+    if(L.rods&&b.fallY<.05&&b.h===0){const d=Math.hypot(b.x,b.z),RR=L.W/2-.12,T=.09;if(d>RR-T-b.r&&d<RR+T+b.r&&d>1e-6){const a=Math.atan2(b.z,b.x);let on=0;
+        for(const q of L.rods){let u=a-q[0];u-=Math.floor(u/6.2832)*6.2832;if(u<=q[1]-q[0]){on=1;break}}
+        if(on){const nx=b.x/d,nz=b.z/d,ins=d<RR,lim=ins?RR-T-b.r:RR+T+b.r,vn=b.vx*nx+b.vz*nz;b.x=nx*lim;b.z=nz*lim;if(ins?vn>0:vn<0){hit(Math.abs(vn),b);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz}}
+        else for(const q of L.rods)for(const an of q){const px=Math.cos(an)*RR,pz=Math.sin(an)*RR,dx=b.x-px,dz=b.z-pz,dd=Math.hypot(dx,dz),rr=.13+b.r;if(dd<rr&&dd>1e-6){const nx=dx/dd,nz=dz/dd,vn=b.vx*nx+b.vz*nz;b.x=px+nx*rr;b.z=pz+nz*rr;if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*nx;b.vz-=(1+e)*vn*nz}}}}}
     if(L.open){if(b.fallY<.05&&(L.edges?!inPoly(L.edges,b.x,b.z,0):Math.abs(b.x)>hwB||Math.abs(b.z)>hdB)){b.off=1;b.offV=0;sfx('fall');if(!b.pole)fail('A ball rolled off the edge. Keep them all on the table.');continue}}
     else if(L.edges){for(const E of L.edges){const d=(b.x-E[0])*E[2]+(b.z-E[1])*E[3];if(d<b.r){b.x+=E[2]*(b.r-d);b.z+=E[3]*(b.r-d);const vn=b.vx*E[2]+b.vz*E[3];if(vn<0){hit(-vn,b);b.vx-=(1+e)*vn*E[2];b.vz-=(1+e)*vn*E[3]}}}}else{
     const hw=hwB-b.r,hd=hdB-b.r;
@@ -811,7 +899,7 @@ function step(dt){
     if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}}
     // rolled off the edge of a deck: drop to whatever is below
     if(b.deck&&!inRect(b.deck,b.x,b.z)){const nd=deckAt(b.x,b.z,b.h),nh=nd?nd.top:0;b.fallY+=b.h-nh;b.h=nh;b.deck=nd;if(b.over)b.over.dwell=0;b.over=null;b.dip=b.dv=0;sfx('fall');
-      if(mode==='play'&&!pads.length&&stranded()){mode='lost';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
+      if(mode==='play'&&!pads.length&&!chutes.length&&stranded()){mode='lost';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
     for(const r of rects){
       if(r.deck?b.h>=r.deck.top-.01:r.h!==b.h)continue;
       if(r.gate&&r.gate.open>.5)continue;
@@ -842,6 +930,10 @@ function step(dt){
       b.x+=q.x-p.x;b.z+=q.z-p.z;b.px=b.x;b.pz=b.z;b.h=q.h;b.deck=q.deck;b.pad=q;if(b.over)b.over.dwell=0;b.over=null;b.dv=0;b.warp=1;p.flash=q.flash=1;
       board.localToWorld(wp.set(q.x,q.h+.2,q.z));burst(wp,p.tint,22,3.4,1.8);ripple(q.x,q.h,q.z,1.6,p.tint);sfx('whoosh');buzz('drop');break}
   }
+  for(const b of balls){if(b.hole||b.off||b.fallY>.05)continue; // trapdoors: through the upper floor and down to the one below
+    for(const c of chutes){if(b.h!==c.h||Math.hypot(b.x-c.x,b.z-c.z)>c.r-b.r*.4)continue;
+      b.x=c.lx+(Math.random()-.5)*.3;b.z=c.lz+(Math.random()-.5)*.25;b.px=b.x;b.pz=b.z;if(c.th>c.h){b.h=c.th;b.deck=c.deck;b.fallY=.6;b.fvy=3}else{b.fallY=c.h-c.th+.25;b.fvy=0;b.h=c.th;b.deck=null}b.vx*=.25;b.vz*=.25;b.warp=1;if(b.over)b.over.dwell=0;b.over=null;b.dv=0;
+      sfx(c.th>c.h?'whoosh':'fall');buzz('drop');ripple(c.lx,c.th,c.lz,1.6,c.tint);break}}
   // pockets: slow and close and the well draws the ball in; fast and it skips across
   for(const b of balls){if(b.hole||b.pole||b.off)continue;let on=null;
     if(b.cool>0)b.cool-=dt;
@@ -882,6 +974,7 @@ function draw(dt,alpha){
   for(const u of bumps){u.flash=Math.max(0,u.flash-dt*4);u.mesh.scale.set(1+.2*u.flash,1,1+.2*u.flash);u.mat.emissiveIntensity=(u.split&&u.used?.08:.5+.2*Math.sin(now/350+u.x))+u.flash*1.6;if(u.cap)u.cap.visible=!u.used}
   for(const m of hots)m.emissiveIntensity=.75+.45*Math.sin(now/160);
   for(const t of belts)t.tex.offset.y-=t.sp*dt/.6;
+  for(const c of chutes)if(c.beam){c.beam.material.opacity=.07+.05*Math.sin(now/170+c.x);c.beam.scale.y=.9+.15*Math.sin(now/230+c.x);c.beam.rotation.y+=dt*2}
   for(const m of movers)m.mesh.position.set(m.cx,WALLH*.575,m.cz);
   for(const p of plates)p.disc.material.opacity=p.on||p.g.latched?.95:.3+.12*Math.sin(now/300+p.x);
   for(const p of pads){p.flash=Math.max(0,p.flash-dt*2.5);const w=.5+.5*Math.sin(now/260+p.x);p.ring.material.opacity=.42+.12*w;p.disc.material.opacity=.06+.04*w+.5*p.flash;p.beam.material.opacity=.018+.012*w+.3*p.flash;p.beam.scale.y=.55+p.flash*1.6;p.disc.rotation.y+=dt}
@@ -1012,15 +1105,16 @@ function frame(now){
   if(L)draw(dt,acc/H);
 }
 window.__mh={
-  print(n){let h=2166136261;const s=JSON.stringify(LEVELS.slice(0,n||FROZEN[0]).map(l=>[l.W,l.D,l.shape,l.balls,l.holes,l.walls,l.decks,l.portals,l.gates,l.plates,l.movers,l.f,l.boss,l.bump,l.split,l.belts,l.hot,l.poles,l.slip,l.open]));for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)},
+  print(n){let h=2166136261;const s=JSON.stringify(LEVELS.slice(0,n||FROZEN[0]).map(l=>[l.W,l.D,l.shape,l.balls,l.holes,l.walls,l.decks,l.portals,l.gates,l.plates,l.movers,l.f,l.boss,l.bump,l.split,l.belts,l.hot,l.poles,l.slip,l.open,l.chutes,l.rods,l.float,l.voids,l.slope,l.ped]));for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)},
   frozenOK(){return this.print(FROZEN[0])===FROZEN[1]},
   meta(){return STAGES.map(s=>{const l=LEVELS[s[0]];return[l.theme,(l.mods||[]).join('+'),l.f?1:l.boss?2:0,l.need]})},
   auto(i,secs){ // a simple test player: walks one ball at a time to a well along a flood-filled path
     bot=1;begin(i);intro=1;mode='play';started=true;balls.forEach(b=>b.drop=0);
-    const res=.05,W=L.W,D=L.D,nx=Math.ceil(W/res),nz=Math.ceil(D/res),fields=new Map(),N=[[1,0],[-1,0],[0,1],[0,-1]],care=L.open||L.hot.length;
-    const blocked=(x,z,r,h,down)=>{const e=r+(L.open?.45:0);if(L.edges?!inPoly(L.edges,x,z,e):Math.abs(x)>W/2-e||Math.abs(z)>D/2-e)return true;
+    const res=.05,W=L.W,D=L.D,nx=Math.ceil(W/res),nz=Math.ceil(D/res),fields=new Map(),N=[[1,0],[-1,0],[0,1],[0,-1]],care=L.open||L.hot.length||L.voids;
+    const blocked=(x,z,r,h,down)=>{const e=r+(L.open?.45:0);if(L.voids&&h===0&&nearVoid(L.voids,x,z,r+.3))return true;if(L.edges?!inPoly(L.edges,x,z,e):Math.abs(x)>W/2-e||Math.abs(z)>D/2-e)return true;
       for(const q of rects){if(q.gate||q.vx!==undefined)continue;if(q.deck){if(down||h>=q.deck.top-.01)continue}else if(q.h!==h)continue;const qx=clamp(x,q.x0,q.x1),qz=clamp(z,q.z0,q.z1);if(Math.hypot(x-qx,z-qz)<r+(q.hot?.35:0))return true}
-      for(const u of bumps)if(!(u.split&&!u.used)&&Math.hypot(x-u.x,z-u.z)<u.r+r)return true;return false};
+      for(const u of bumps)if(!(u.split&&!u.used)&&Math.hypot(x-u.x,z-u.z)<u.r+r)return true;
+      for(const q of chutes)if(q!==exempt&&q.h===h&&Math.hypot(x-q.x,z-q.z)<q.r+r*.5)return true;return false};let exempt=null;
     const ci=(x,z)=>[clamp(Math.floor((x+W/2)/res),0,nx-1),clamp(Math.floor((z+D/2)/res),0,nz-1)],cx=a=>-W/2+(a+.5)*res,cz=b=>-D/2+(b+.5)*res;
     const padAt=(x,z)=>pads.find(p=>Math.hypot(x-p.x,z-p.z)<PR-.06);
     const field=(gx,gz,r,h,down,key)=>{if(fields.has(key))return fields.get(key);const f=new Float32Array(nx*nz).fill(1e9),q=ci(gx,gz);f[q[1]*nx+q[0]]=0;
@@ -1034,11 +1128,13 @@ window.__mh={
         const sp=bumps.find(u=>u.split&&!u.used),free=balls.filter(b=>!b.hole&&!b.pole&&!b.off),near=b=>Math.min(...holes.filter(h=>!h.ball&&h.s===b.s).map(h=>Math.hypot(h.x-b.x,h.z-b.z)),99),b=care?free.sort((p,q)=>near(p)-near(q))[0]:free[0];target.x=target.y=0;
         if(b){let g=null,f=null;let [a,c]=ci(b.x,b.z);const rr=b.r+.03,ub=bumps.filter(u=>u.used).length;
           if(Math.hypot(b.x-lx,b.z-lz)>.12){lx=b.x;lz=b.z;still=0}else if(++still>30){still=0;jig=8;const an=Math.random()*6.28;jx=Math.cos(an);jz=Math.sin(an)}
-          if(sp){g=[sp.x,sp.z];f=field(sp.x,sp.z,rr,0,0,'s'+sp.x+b.s+ub)}
+          const way=chutes.filter(q=>q.h===b.h);if(way.length&&!holes.some(h=>!h.ball&&h.s===b.s&&h.h===b.h)){const good=way.filter(q=>holes.some(h=>!h.ball&&h.s===b.s&&h.h===q.th&&Math.hypot(h.x-q.lx,h.z-q.lz)<3.8)),cc=(good.length?good:way).sort((p,q)=>Math.hypot(p.x-b.x,p.z-b.z)-Math.hypot(q.x-b.x,q.z-b.z))[0];g=[cc.x,cc.z];exempt=cc;f=field(cc.x,cc.z,rr,b.h,0,'c'+cc.x+cc.z+b.s);exempt=null}
+          else if(sp){g=[sp.x,sp.z];f=field(sp.x,sp.z,rr,0,0,'s'+sp.x+b.s+ub)}
           else for(const down of [0,1]){if(g)break;let best=1e9;for(const h of holes){if(h.ball||h.s!==b.s||(down?h.h>=b.h:h.h!==b.h))continue;const ff=field(h.x,h.z,rr,h.h,down,[h.x,h.z,b.s,ub,down]+''),v=ff[c*nx+a];if(v<=best){best=v;g=[h.x,h.z];f=ff}}}
           if(jig>0){jig--;target.x=jx;target.y=jz}
           else if(g){let tx=g[0],tz=g[1];const dg=Math.hypot(g[0]-b.x,g[1]-b.z);
-            if(f[c*nx+a]>=1e8){let bd=1e9;for(let P=a-8;P<=a+8;P++)for(let Q=c-8;Q<=c+8;Q++){if(P<0||Q<0||P>=nx||Q>=nz||f[Q*nx+P]>=1e8)continue;const dd=Math.hypot(P-a,Q-c);if(dd<bd){bd=dd;tx=cx(P);tz=cz(Q)}}} // pressed against a wall: step back onto the path first
+            if(!f){}
+            else if(f[c*nx+a]>=1e8){let bd=1e9;for(let P=a-8;P<=a+8;P++)for(let Q=c-8;Q<=c+8;Q++){if(P<0||Q<0||P>=nx||Q>=nz||f[Q*nx+P]>=1e8)continue;const dd=Math.hypot(P-a,Q-c);if(dd<bd){bd=dd;tx=cx(P);tz=cz(Q)}}} // pressed against a wall: step back onto the path first
             else if(dg>.45){let bv=f[c*nx+a],A=a,B=c;for(let s=0;s<8;s++){let m=null;const nb=N.map(([da,db])=>[A+da,B+db]),p=padAt(cx(A),cz(B));if(p)nb.push(ci(p.twin.x,p.twin.z));
                 for(const [P,Q] of nb){if(P<0||Q<0||P>=nx||Q>=nz)continue;if(f[Q*nx+P]<bv){bv=f[Q*nx+P];m=[P,Q]}}if(!m)break;
                 if(Math.abs(m[0]-A)+Math.abs(m[1]-B)>1){const p2=padAt(cx(A),cz(B));m=null;tx=p2.x;tz=p2.z;A=-1;break}A=m[0];B=m[1]}
@@ -1047,6 +1143,7 @@ window.__mh={
           if(care){ // look half a second ahead for every ball, and refuse a tilt that sends one into a red wall or off the table
             const sl=L.slip?1.55:1,T=.45,safe=(tx,ty)=>{const ax=G*Math.sin(tx*MAXT)*sl,az=G*Math.sin(ty*MAXT)*sl;
               for(const q of balls){if(q.hole||q.off||q.pole)continue;for(const k of [.5,1]){const t=T*k,x=q.x+q.vx*t+.5*ax*q.ka*t*t,z=q.z+q.vz*t+.5*az*q.ka*t*t;
+                if(L.voids&&q.h===0&&nearVoid(L.voids,x,z,q.r*.6))return false;
                 if(L.open&&(L.edges?!inPoly(L.edges,x,z,.12):Math.abs(x)>W/2-.12||Math.abs(z)>D/2-.12))return false;
                 for(const r of rects)if(r.hot){const qx=clamp(x,r.x0,r.x1),qz=clamp(z,r.z0,r.z1);if(Math.hypot(x-qx,z-qz)<q.r+.14)return false}}}return true};
             const wx=target.x,wy=target.y;let done=0;for(const k of [1,.6,.3]){if(safe(wx*k,wy*k)){target.x=wx*k;target.y=wy*k;done=1;break}}
