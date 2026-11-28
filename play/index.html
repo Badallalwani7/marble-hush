@@ -42,6 +42,14 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 #toast{position:fixed;left:0;right:0;top:21%;text-align:center;font:800 26px/1 var(--display);letter-spacing:.02em;text-shadow:0 3px 14px rgba(0,0,0,.55);pointer-events:none;opacity:0;z-index:6}
 #toast.go{animation:toast 1s cubic-bezier(.2,.9,.3,1) both}
 @keyframes toast{0%{opacity:0;transform:translateY(14px) scale(.6)}18%{opacity:1;transform:translateY(0) scale(1.12)}30%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-18px) scale(1)}}
+#wsChip{font:700 12px/1 var(--text);color:#ffb74a;margin-top:3px;min-height:12px;letter-spacing:.04em}
+#wstreak{font:700 13px/1.35 var(--text);color:#ffb74a;margin-top:8px}
+.daily.bag{margin-top:8px;background:var(--glass);border-color:var(--line)}
+#shop{max-height:80vh;overflow:auto}#shop h4{font:700 11px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;margin-top:16px;opacity:.75;text-align:left}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.tile{padding:9px 3px 8px;border-radius:14px;background:var(--glass);border:1px solid var(--line);font:700 10px/1.2 var(--text);display:grid;justify-items:center;gap:5px;color:inherit}
+.tile i{width:30px;height:30px;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}.tile i.sq{border-radius:8px}
+.tile small{font-weight:500;font-size:9px;opacity:.7}.tile.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.45)}.tile.lock{opacity:.5}
 #hint{font:500 13px/1.35 var(--text);color:var(--dim);text-align:center;max-width:300px;transition:opacity .6s}
 #dial{width:46px;height:46px;border-radius:50%;border:1.5px solid var(--line);position:relative;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%)}
 #dial i{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
@@ -155,12 +163,18 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
   <div id="foot" class="off"><div id="hint"></div><div id="dial" aria-hidden="true"><i></i></div></div>
 
   <section id="home" class="screen">
-    <header><h1><span>Tilt ball maze</span>Stubborn Balls</h1><div><span id="total"></span></div><button id="bDaily" class="daily"></button></header>
+    <header><h1><span>Tilt ball maze</span>Stubborn Balls</h1><div><span id="total"></span></div><button id="bDaily" class="daily"></button><button id="bBag" class="daily bag"></button></header>
     <div id="map"></div>
     <div id="playbar"><button class="cta" id="bPlay">Play</button></div>
   </section>
 
   <div id="shade" class="off"></div>
+  <section id="shop" class="card off" aria-label="Collection">
+    <h3>Collection</h3><p id="shopSub"></p>
+    <h4>Balls</h4><div id="skins" class="tiles"></div>
+    <h4>Tables</h4><div id="themes" class="tiles"></div>
+    <div class="stack"><button class="cta" id="shopClose">Done</button></div>
+  </section>
   <section id="pause" class="card off" aria-label="Paused">
     <h3>Paused</h3><p id="ptext"></p>
     <div class="stack"><button class="cta" id="bResume">Resume</button><button id="bRetry">Restart level</button><button id="bMap">Level map</button></div>
@@ -596,6 +610,13 @@ try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.best)save=s;
   else{const o=JSON.parse(localStorage.getItem('marble-hush-v5')||localStorage.getItem('marble-hush-v4')); // the level list changed: keep the count of stages cleared, not the old indexes
     if(o&&o.best){const n=Math.min(STAGES.length-1,Object.keys(o.best).length);for(let k=0;k<n;k++)save.best[STAGES[k][0]]=999;save.streak=o.streak;save.dailyDay=o.dailyDay;localStorage.setItem(KEY,JSON.stringify(save))}}}catch(e){}
 const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}};
+// Things to collect. Stars open ball finishes and table colours; a daily streak opens the rarest finishes.
+const SKINS=[{n:'Chrome',sw:'radial-gradient(circle at 32% 28%,#fff,#6a7088 42%,#0c0e18)'},{n:'Pearl',stars:15,sw:'radial-gradient(circle at 32% 28%,#fff,#e8e4f6 55%,#a9a3c4)'},{n:'Clay',stars:40,sw:'radial-gradient(circle at 35% 30%,#e9b9a0,#b8755c 70%,#7a4636)'},{n:'Ember',stars:90,sw:'radial-gradient(circle at 40% 35%,#ffd7a0,#ff6a3a 45%,#3a0c06)'},
+  {n:'Gold',day:3,sw:'radial-gradient(circle at 32% 28%,#fff6c8,#ffc233 45%,#7a4a00)'},{n:'Neon',day:7,sw:'radial-gradient(circle at 50% 50%,#9dfff0,#19c9ff 40%,#060818 75%)'},{n:'Galaxy',day:14,sw:'radial-gradient(circle at 30% 28%,#e9d9ff,#7a5cff 45%,#160a48)'}];
+const THEMES=[{n:'Classic',sw:'linear-gradient(#5ff0d6,#0b6f86)'},{n:'Midnight',stars:25,floor:['#46549a','#161c50','#070920'],rim:'#04050f',sw:'linear-gradient(#46549a,#070920)'},{n:'Sunset',stars:60,floor:['#ffb98a','#d2536a','#4a1640'],rim:'#2a0a22',sw:'linear-gradient(#ffb98a,#4a1640)'},{n:'Mint',stars:120,floor:['#c8ffe6','#35b08c','#0c4a48'],rim:'#062624',sw:'linear-gradient(#c8ffe6,#0c4a48)'}];
+const totalStars=()=>STAGES.reduce((n,st)=>n+starsFor(st[0],save.best[st[0]]),0);
+const owned=o=>o.stars?totalStars()>=o.stars:o.day?(save.bestStreak||0)>=o.day:true, needs=o=>o.stars?o.stars+' stars':o.day?o.day+'-day streak':'';
+const savers=()=>save.savers==null?3:save.savers; // free passes that keep a daily streak alive after a missed day
 const starsFor=(i,t)=>t==null?0:t<=LEVELS[i].par[0]?3:t<=LEVELS[i].par[1]?2:1;
 const stageDone=k=>STAGES[k].some(i=>save.best[i]!=null);
 const UNLOCK_ALL=false; // testing: every board is open. Set false to require clearing the previous stage.
@@ -697,12 +718,23 @@ function floorTex(c,sl){
   else if(sl){for(let y=0;y<512;y+=64){const u=sl==='down'?1-y/512:y/512;g.fillStyle='rgba(255,255,255,'+(.02+.16*u)+')';g.fillRect(0,y,512,58);g.fillStyle='rgba(0,0,0,.18)';g.fillRect(0,y+58,512,6)}} // a ramp: steps of light, brightest at the top
   const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;
 }
+function ballMat(c,s){ // the ball finish the player has equipped; size colours stay readable in every finish
+  const k=SKINS[save.skin|0]&&owned(SKINS[save.skin|0])?save.skin|0:0,P={color:c.clone().multiplyScalar(s===1?.18:.5),metalness:.85,roughness:.15,clearcoat:1,clearcoatRoughness:.05,envMapIntensity:1.5,emissive:c,emissiveIntensity:0};let glow=0;
+  if(k===1){P.color=c.clone().lerp(new THREE.Color(1,1,1),.6);P.metalness=.1;P.roughness=.2;P.envMapIntensity=.9}
+  else if(k===2){P.color=c.clone().multiplyScalar(.85);P.metalness=0;P.roughness=.9;P.clearcoat=0;P.envMapIntensity=.3}
+  else if(k===3){P.color=c.clone().multiplyScalar(.3);glow=.45}
+  else if(k===4){P.color=c.clone().lerp(col('#ffc233'),.72);P.metalness=1;P.roughness=.2}
+  else if(k===5){P.color=new THREE.Color(.02,.02,.04);P.metalness=.2;P.roughness=.3;glow=1.1}
+  else if(k===6){P.color=c.clone().lerp(col('#6a4cff'),.55);P.metalness=.95;P.roughness=.08;P.emissive=col('#7a5cff');glow=.3}
+  const m=new THREE.MeshPhysicalMaterial(P);m.userData.glow=glow;return m}
 function clearBoard(){own.forEach(o=>o.dispose());own=[];while(board.children.length)board.remove(board.children[0]);balls=[];holes=[];rects=[];decks=[];pads=[];gates=[];plates=[];movers=[];ripples=[];bumps=[];belts=[];hots=[];chutes=[]}
 const keep=o=>(own.push(o),o);
 const inRect=(d,x,z)=>x>d.x0&&x<d.x1&&z>d.z0&&z<d.z1;
 const deckAt=(x,z,below=1e9)=>{let best=null;for(const d of decks)if(d.top<below-.01&&inRect(d,x,z)&&(!best||d.top>best.top))best=d;return best};
 function load(i){
   clearBoard();cur=i;L=LEVELS[i];WD=WORLDS[L.pal];run++;
+  {const T=THEMES[save.theme|0];if(T&&T.floor&&owned(T))WD=Object.assign({},WD,{floor:T.floor,rim:T.rim})} // the player's chosen table colours
+  perk=bot?0:Math.min(save.ws||0,5)*.08; // a win streak makes the wells reach a little further
   wild=L.boss?Math.max(.2,.6-((tries[i]||1)-1)*.2):0;
   ease=bot?0:clamp(((tries[i]||1)-2)*.2,0,.8); // from the third try the pockets reach further and the hidden magnets weaken // a boss plays wild, and calms down a little with each retry
   const {W,D}=L, RIM=.12;
@@ -791,7 +823,7 @@ function load(i){
     const stone=false, c=col(pole?(pole>0?'#35d8ff':'#ff5a3c'):TINT[s]);
     const m=keep(pole?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.3,roughness:.25,envMapIntensity:1,emissive:c,emissiveIntensity:.8})
       :stone?new THREE.MeshStandardMaterial({color:c.clone().multiplyScalar(.5),metalness:.25,roughness:.38,flatShading:true,envMapIntensity:.9,emissive:c,emissiveIntensity:0})
-      :new THREE.MeshPhysicalMaterial({color:c.clone().multiplyScalar(s===1?.18:.5),metalness:.85,roughness:.15,clearcoat:1,clearcoatRoughness:.05,envMapIntensity:1.5,emissive:c,emissiveIntensity:0}));
+      :ballMat(c,s));
     const mesh=new THREE.Mesh(stone?stoneGeo[s]:ballGeo[s],m);mesh.castShadow=true;board.add(mesh);
     if(pole){const halo=new THREE.Mesh(haloGeo,keep(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.16,blending:THREE.AdditiveBlending,depthWrite:false})));halo.scale.setScalar(SZ[s]*1.7);mesh.add(halo)}
     const dk=deckAt(x,z),b={x,z,px:x,pz:z,vx:0,vz:0,s,r:SZ[s],m:Math.pow(SZ[s],3)*(stone?1.7:1),stone,pole:pole||0,off:0,offY:0,offV:0,mag:[],h:dk?dk.top:0,deck:dk,ka,kf:.55+rnd()*1.1,ph:rnd()*6.28,wf:1.1+rnd()*1.6,wrong:false,cool:0,pad:null,fallY:0,fvy:0,dip:0,dv:0,over:null,hop:0,bowl:0,hole:null,sink:0,drop:0,mesh,mat:m,q:new THREE.Quaternion()};
@@ -833,10 +865,13 @@ function capture(b,h){
   sfx('drop');buzz('drop');
   if(placed===L.need)win();
 }
-let combo=0,lastCap=-9,ease=0;
+let combo=0,lastCap=-9,ease=0,perk=0;
 function toast(s,c){const t=$('#toast');t.textContent=s;t.style.color=c||'#fff';t.classList.remove('go');void t.offsetWidth;t.classList.add('go')}
+function stepDown(){if(!bot&&L&&!L.daily&&save.ws>0){save.ws--;persist()}} // a fail costs one step of the streak, never all of it
 function fail(msg){ // the level starts over on its own
-  if(mode!=='play')return;mode='lost';target.x=target.y=0;drag=null;track('level_fail',{level:L.label,stage:L.stage+1});buzz('drop');
+  if(mode!=='play')return;mode='lost';target.x=target.y=0;drag=null;const near=L.need>1&&L.need-placed===1;track('level_fail',{level:L.label,stage:L.stage+1,near:near?1:0});buzz('drop');
+  if(near){toast('One ball away!','#ffd76a');msg='One ball away. '+msg} // a near miss is named, so the retry feels close
+  stepDown();
   const t=$('#hint');t.textContent=msg;t.style.opacity=1;if(bot)return;const r=run;
   setTimeout(()=>{if(run===r&&mode==='lost')leave(()=>{begin(cur);const h=$('#hint');h.textContent=msg;h.style.opacity=1})},850)}
 function pop(b){
@@ -899,7 +934,7 @@ function step(dt){
     if(b.z<-hd){b.z=-hd;if(b.vz<0){hit(-b.vz,b);b.vz*=-e}}else if(b.z>hd){b.z=hd;if(b.vz>0){hit(b.vz,b);b.vz*=-e}}}
     // rolled off the edge of a deck: drop to whatever is below
     if(b.deck&&!inRect(b.deck,b.x,b.z)){const nd=deckAt(b.x,b.z,b.h),nh=nd?nd.top:0;b.fallY+=b.h-nh;b.h=nh;b.deck=nd;if(b.over)b.over.dwell=0;b.over=null;b.dip=b.dv=0;sfx('fall');
-      if(mode==='play'&&!pads.length&&!chutes.length&&stranded()){mode='lost';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
+      if(mode==='play'&&!pads.length&&!chutes.length&&stranded()){mode='lost';stepDown();$('#lost h3').textContent=L.need>1&&L.need-placed===1?'One ball away':'Stranded';track('level_fail',{level:L.label,stage:L.stage+1});const r=run;setTimeout(()=>{if(run===r&&mode==='lost'){buzz('drop');cls('#hud',true);cls('#foot',true);cls('#shade',false);cls('#lost',false)}},900)}}
     for(const r of rects){
       if(r.deck?b.h>=r.deck.top-.01:r.h!==b.h)continue;
       if(r.gate&&r.gate.open>.5)continue;
@@ -939,8 +974,8 @@ function step(dt){
     if(b.cool>0)b.cool-=dt;
     else if(b.fallY<.05){const sp=Math.hypot(b.vx,b.vz);
       for(const h of holes){if(h.h!==b.h||h.ball||h.s<b.s)continue;const dx=h.x-b.x,dz=h.z-b.z,d=Math.hypot(dx,dz);
-        if(h.s===b.s){if(d<h.R+PULL_R*(1+ease)&&d>.02&&sp<PULL_V*(1+.5*ease)){const f=PULL*(1-d/(h.R+PULL_R*(1+ease)))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}
-          if(d<h.R*.8){if(sp<CAP_V*(1+.5*ease)){on=h;break}if(!(b.skip>clock)){b.skip=clock+1.2;toast('Too fast!','#ff9d6a');ripple(h.x,h.h,h.z,1.1,'#ff9d6a');buzz('tick')}}}
+        if(h.s===b.s){if(d<h.R+PULL_R*(1+ease+perk)&&d>.02&&sp<PULL_V*(1+.5*(ease+perk))){const f=PULL*(1-d/(h.R+PULL_R*(1+ease+perk)))*dt;b.vx+=dx/d*f;b.vz+=dz/d*f}
+          if(d<h.R*.8){if(sp<CAP_V*(1+.5*(ease+perk))){on=h;break}if(!(b.skip>clock)){b.skip=clock+1.2;toast(L.need-placed===1?'So close!':'Too fast!','#ff9d6a');ripple(h.x,h.h,h.z,1.1,'#ff9d6a');buzz('tick')}}}
         else if(d<h.R-b.r*.6&&sp<SEAT_V){on=h;break}}} // a smaller ball only lodges in a bigger well when it stops there
     const seatT=on&&on.s===b.s?.03:SEAT_T;if(on){b.over=on;b.dv+=dt;on.dwell=b.dv/seatT;if(b.dv>=seatT)capture(b,on)}
     else{if(b.over)b.over.dwell=0;b.over=null;b.dv=0}
@@ -966,7 +1001,7 @@ function draw(dt,alpha){
     if(b.warp){b.warp=0;b.mesh.position.set(x,0,z)}else if(d>1e-5&&d<1){axis.set(mz/d,0,-mx/d);dq.setFromAxisAngle(axis,d/b.r);b.q.premultiply(dq)}
     let yy=b.h+b.r+b.fallY+b.offY-b.dip-b.bowl+Math.sin(Math.min(1,b.hop/.16)*Math.PI)*.1;
     if(b.drop>0){b.drop-=dt;const t=clamp(1-b.drop/.45,0,1);yy+=(1-t)*(1-t)*7;b.mesh.visible=b.drop<.45}
-    if(b.hole){yy=lerp(b.h+b.r,b.wrong?b.h-WELL+b.r+.01:b.h-b.r*.42,easeBack(b.sink));b.mat.emissiveIntensity=b.wrong?0:.07*b.sink+.03*Math.sin(now/420+b.x)}else b.mat.emissiveIntensity=b.pole?.7+.3*Math.sin(now/300+b.ph):0;
+    if(b.hole){yy=lerp(b.h+b.r,b.wrong?b.h-WELL+b.r+.01:b.h-b.r*.42,easeBack(b.sink));b.mat.emissiveIntensity=b.wrong?0:.07*b.sink+.03*Math.sin(now/420+b.x)+(b.mat.userData.glow||0)}else b.mat.emissiveIntensity=b.pole?.7+.3*Math.sin(now/300+b.ph):(b.mat.userData.glow||0);
     b.mesh.position.set(x,yy,z);b.mesh.quaternion.copy(b.q);
   }
   for(const h of holes){h.lit=lerp(h.lit,h.ball?1:Math.min(.7,h.dwell||0),Math.min(1,dt*8));h.ring.material.opacity=h.ball&&h.ball.wrong?.8+.2*Math.sin(now/130):.38+.62*h.lit+(h.ball?0:.12*Math.sin(now/500+h.x*2));h.glow.material.opacity=.1+.25*h.lit}
@@ -986,7 +1021,7 @@ function draw(dt,alpha){
   const lift=dist*.085;camera.position.set(camX,Math.sin(el)*dist,Math.cos(el)*dist+lift+camZ);ctr.set(camX*.25,.1,lift);camera.lookAt(ctr);
   renderer.render(scene,camera);
 }
-function updateHUD(pop){const c=$('#count');c.textContent=placed+'/'+L.need;if(pop){c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop')}}
+function updateHUD(pop){$('#wsChip').textContent=!L.daily&&save.ws>=2?'Streak ×'+save.ws:'';const c=$('#count');c.textContent=placed+'/'+L.need;if(pop){c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop')}}
 
 // ---------- input: hold and drag to tilt; let go and the board springs level ----------
 const REACH=85;let drag=null;const keys={};
@@ -1012,7 +1047,7 @@ function readKeys(){
 const cls=(id,off)=>$(id).classList.toggle('off',off);
 const STAR='<svg viewBox="0 0 24 24"><path d="M12 2.2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.4 5.9 20.8l1.4-6.8L2.2 9.3l6.9-.8z"/></svg>';
 const LOCK='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
-const CARDS=['#win','#pause','#lost','#forkc','#upd'];
+const CARDS=['#win','#pause','#lost','#forkc','#upd','#shop'];
 const hideCards=()=>{CARDS.forEach(c=>cls(c,true));cls('#shade',true)};
 function begin(i){
   tries[i]=(tries[i]||0)+1;load(i);track('level_start',{level:LEVELS[i].label,stage:LEVELS[i].stage+1,name:LEVELS[i].name});mode='intro';intro=0;outro=0;celebrate=0;drag=null;
@@ -1026,7 +1061,13 @@ function resume(){hideCards();mode='play'}
 function win(){
   mode='won';celebrate=1.6;target.x=target.y=0;drag=null;
   const t=Math.round(time*10)/10,prev=L.daily?null:save.best[cur],best=!bot&&!L.daily&&(prev==null||t<prev);if(best){save.best[cur]=t;persist()}
-  if(L.daily&&save.dailyDay!==L.daily){save.streak=save.dailyDay===yesterday()?(save.streak||0)+1:1;save.dailyDay=L.daily;persist();track('daily_complete',{streak:save.streak})}
+  let note='';
+  if(L.daily&&save.dailyDay!==L.daily){const kept=save.dailyDay===yesterday();let saved=false;
+    if(!kept&&save.streak>0&&save.dailyDay&&savers()>0){save.savers=savers()-1;saved=true} // a missed day costs a saver, not the streak
+    const before=save.bestStreak||0;save.streak=kept||saved?(save.streak||0)+1:1;save.bestStreak=Math.max(before,save.streak);save.dailyDay=L.daily;persist();track('daily_complete',{streak:save.streak,saver:saved?1:0});
+    const got=SKINS.find(o=>o.day&&o.day>before&&o.day<=save.bestStreak),nx=SKINS.find(o=>o.day&&o.day>save.bestStreak);
+    note=(saved?'Streak saved. '+save.savers+' saver'+(save.savers===1?'':'s')+' left. ':'')+(got?'New ball finish unlocked: '+got.n+'!':nx?'Day '+nx.day+' unlocks the '+nx.n+' finish.':'');remind(true)}
+  else if(!L.daily&&!bot){save.ws=(save.ws||0)+1;persist();note=save.ws>=2?'Streak ×'+save.ws+(save.ws<=5?' · wells pull harder next level':' · full streak bonus'):''}
   sfx('win');buzz('win');const r=run;track('level_complete',{level:L.label,stage:L.stage+1,seconds:t,highest:nextStage()+1});
   holes.forEach((h,k)=>setTimeout(()=>{if(run!==r)return;board.localToWorld(wp.set(h.x,h.h+.2,h.z));burst(wp,TINT[h.s],30,5.5,1.8);ripple(h.x,h.h,h.z,2.6,TINT[h.s])},90*k));
   setTimeout(()=>{if(run===r){wp.set(0,.5,0);burst(wp,'#ffffff',90,8,1.4)}},90*holes.length+80);
@@ -1036,6 +1077,7 @@ function win(){
     $('#wname').textContent='Level '+L.label+' · '+L.name;$('#wtime').textContent=t.toFixed(1)+'s';
     $('#wbest').textContent=best&&prev!=null?'New best — was '+prev.toFixed(1)+'s':n<3?'Three stars under '+L.par[0]+'s':prev!=null&&!best?'Best '+prev.toFixed(1)+'s':'A perfect run';
     const ns=L.daily?null:STAGES[L.stage+1];$('#wNext').textContent=!ns?'Level map':ns.length>1?'Choose next':LEVELS[ns[0]].boss?'Face the boss':LEVELS[ns[0]].f?'Take the hard one':'Next level';
+    $('#wstreak').textContent=note;
     $('#win h3').textContent=L.daily?'Daily board cleared · streak '+save.streak:L.boss?'Boss beaten':'All marbles home';
     const s=$('#stars');s.innerHTML=STAR.repeat(3);[...s.children].forEach((el,k)=>{if(k<n)el.classList.add('gold');setTimeout(()=>{el.classList.add('in');if(k<n&&run===r){sfx('star');buzz('tick')}},350+k*230)});
     cls('#win',false)},1250);
@@ -1053,7 +1095,7 @@ function openStage(k,asked){const s=STAGES[k];
   cls('#win',true);cls('#shade',false);cls('#forkc',false);
 }
 function renderHome(){
-  const cleared=STAGES.filter((_,k)=>stageDone(k)).length;$('#total').innerHTML='<b>✓</b> '+cleared+' of '+STAGES.length+' cleared';
+  const cleared=STAGES.filter((_,k)=>stageDone(k)).length;$('#total').innerHTML='<b>✓</b> '+cleared+' of '+STAGES.length+' cleared'+(save.ws>=2?' · Streak ×'+save.ws:'');$('#bBag').innerHTML='★ '+totalStars()+' · Collection';
   const nk=nextStage(),map=$('#map'),N=STAGES.length,STEP=86,PB=74,PT=170,HT=PT+PB+(N-1)*STEP;
   const X=k=>Math.sin(k*.8)*94, Y=k=>HT-PB-k*STEP;
   let way='',walked='';for(let t=0;t<=(N-1)*5;t++){const k=t/5,q=(t?'L':'M')+(150+X(k)).toFixed(1)+' '+Y(k).toFixed(1);way+=q;if(k<=nk)walked+=q}
@@ -1067,15 +1109,25 @@ function renderHome(){
   h+='<div class="soon" style="top:'+(Y(N-1)-112)+'px">'+LOCK+'<b>More levels coming soon</b><span>Level '+(N+1)+' and beyond arrive in an update</span></div>';
   map.innerHTML=h+'</div>';
   map.onclick=e=>{const b=e.target.closest('button[data-i]');if(b){sfx('tap');buzz('tick');begin(+b.dataset.i)}};
-  const dd=save.dailyDay===today(),st=save.dailyDay>=yesterday()?save.streak||0:0;
-  $('#bDaily').innerHTML=(dd?'✓ Daily board done':'☀ Play today’s board')+(st?' · <b>'+st+'-day streak</b>':'');
+  const dd=save.dailyDay===today(),risk=!dd&&save.dailyDay<yesterday()&&save.streak>0&&savers()>0,st=save.dailyDay>=yesterday()||risk?save.streak||0:0;
+  $('#bDaily').innerHTML=(dd?'✓ Daily board done':'☀ Play today’s board')+(st?' · <b>'+st+'-day streak</b>'+(risk?' (a saver will keep it)':''):'');
   const cu=LEVELS[STAGES[nk][0]];$('#bPlay').textContent=save.best[STAGES[0][0]]==null?'Play':stageDone(nk)?'Play again':(cu.boss?'Face the boss · ':cu.f?'Hard level ':'Play level ')+(cu.boss?cu.label:cu.label);
   requestAnimationFrame(()=>{map.scrollTop=Y(nk)-map.clientHeight*.5});
 }
-function goHome(){mode='home';renderHome();cls('#home',false);cls('#hud',true);cls('#foot',true);hideCards();setSky(LEVELS[STAGES[nextStage()][0]].pal)}
+function remind(ask){ // tells the app to (re)schedule the daily reminder; in a browser this does nothing
+  const m={streak:save.streak||0,done:save.dailyDay===today(),savers:savers(),ask:!!ask};
+  try{window.webkit.messageHandlers.mh.postMessage({remind:m})}catch(e){}try{window.MarbleHushAndroid.remind(JSON.stringify(m))}catch(e){}}
+function renderShop(){
+  $('#shopSub').textContent='★ '+totalStars()+' stars · best daily streak '+(save.bestStreak||0)+' · '+savers()+' streak saver'+(savers()===1?'':'s');
+  const fill=(id,list,key,sq)=>{$(id).innerHTML=list.map((o,k)=>'<button class="tile'+((save[key]|0)===k&&owned(o)?' on':'')+(owned(o)?'':' lock')+'" data-k="'+k+'"><i'+(sq?' class="sq"':'')+' style="background:'+o.sw+'"></i>'+o.n+'<small>'+(owned(o)?(save[key]|0)===k?'In use':'Tap to use':needs(o))+'</small></button>').join('');
+    $(id).onclick=e=>{const b=e.target.closest('.tile');if(!b)return;const o=list[+b.dataset.k];sfx('tap');if(!owned(o)){toast('Needs '+needs(o),'#ffb74a');return}save[key]=+b.dataset.k;persist();buzz('tick');renderShop()}};
+  fill('#skins',SKINS,'skin',0);fill('#themes',THEMES,'theme',1)}
+function goHome(){mode='home';remind(false);renderHome();cls('#home',false);cls('#hud',true);cls('#foot',true);hideCards();setSky(LEVELS[STAGES[nextStage()][0]].pal)}
 $('#bDaily').onclick=()=>{sfx('tap');buzz('tick');begin(DAILY)};
+$('#bBag').onclick=()=>{sfx('tap');renderShop();cls('#shade',false);cls('#shop',false)};$('#shopClose').onclick=()=>{sfx('tap');cls('#shop',true);cls('#shade',true)};
+{const w=document.createElement('div');w.id='wsChip';$('#count').parentNode.appendChild(w);const p=document.createElement('p');p.id='wstreak';$('#wbest').after(p)}
 $('#bPlay').onclick=()=>{sfx('tap');buzz('tick');const k=nextStage(),s=STAGES[k];if(s.length>1&&!stageDone(k)){openStage(k)}else begin(s[0])};
-$('#shade').onclick=()=>{if(!$('#forkc').classList.contains('off')){cls('#forkc',true);cls('#shade',true);if(mode==='won')cls('#win',false)}};
+$('#shade').onclick=()=>{if(!$('#shop').classList.contains('off')){cls('#shop',true);cls('#shade',true);return}if(!$('#forkc').classList.contains('off')){cls('#forkc',true);cls('#shade',true);if(mode==='won')cls('#win',false)}};
 $('#bPause').onclick=()=>{sfx('tap');pause()};
 $('#bRestart').onclick=()=>{if(mode==='play'){sfx('tap');leave(()=>begin(cur))}};
 $('#bResume').onclick=()=>{sfx('tap');resume()};
